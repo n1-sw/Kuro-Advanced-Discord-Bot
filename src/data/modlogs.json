@@ -1,0 +1,20 @@
+{
+  "1397638263300161638": [
+    {
+      "id": "mihkssbp",
+      "action": "BAN",
+      "moderatorId": "698131338846404609",
+      "targetId": "1387481641546547262",
+      "reason": "No reason provided",
+      "timestamp": 1764256552549
+    },
+    {
+      "id": "mihkuk98",
+      "action": "WARN",
+      "moderatorId": "698131338846404609",
+      "targetId": "1184786589998653524",
+      "reason": "No reason provided",
+      "timestamp": 1764256635404
+    }
+  ]
+}
