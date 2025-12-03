@@ -1,4 +1,5 @@
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const emoji = require('./emoji');
 
 const createEmbed = (options = {}) => {
     const embed = new EmbedBuilder();
@@ -16,14 +17,14 @@ const createEmbed = (options = {}) => {
 
 const successEmbed = (description) => {
     return createEmbed({
-        description: `✅ ${description}`,
+        description: `${emoji.success} ${description}`,
         color: 0x00ff00
     });
 };
 
 const errorEmbed = (description) => {
     return createEmbed({
-        description: `❌ ${description}`,
+        description: `${emoji.error} ${description}`,
         color: 0xff0000
     });
 };
@@ -35,6 +36,63 @@ const infoEmbed = (title, description) => {
         color: 0x0099ff,
         timestamp: true
     });
+};
+
+// ===== UNIQUE EMBED HELPERS =====
+const economyEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`💰 ${title}`)
+        .setDescription(description)
+        .setColor(0xFFD700)
+        .setTimestamp();
+};
+
+const levelEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`⭐ ${title}`)
+        .setDescription(description)
+        .setColor(0x9370DB)
+        .setTimestamp();
+};
+
+const gameEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`🎮 ${title}`)
+        .setDescription(description)
+        .setColor(0xFF6B9D)
+        .setTimestamp();
+};
+
+const modEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`🛡️ ${title}`)
+        .setDescription(description)
+        .setColor(0xFF4444)
+        .setTimestamp();
+};
+
+const mailEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`📧 ${title}`)
+        .setDescription(description)
+        .setColor(0x00BFFF)
+        .setTimestamp();
+};
+
+const userEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`👤 ${title}`)
+        .setDescription(description)
+        .setColor(0x00CED1)
+        .setTimestamp();
+};
+
+const premiumEmbed = (title, description) => {
+    return new EmbedBuilder()
+        .setTitle(`✨ ${title}`)
+        .setDescription(description)
+        .setColor(0xFFD700)
+        .setTimestamp();
 };
 
 const calculateXpForLevel = (level) => {
@@ -118,6 +176,13 @@ module.exports = {
     successEmbed,
     errorEmbed,
     infoEmbed,
+    economyEmbed,
+    levelEmbed,
+    gameEmbed,
+    modEmbed,
+    mailEmbed,
+    userEmbed,
+    premiumEmbed,
     calculateXpForLevel,
     calculateLevel,
     formatNumber,

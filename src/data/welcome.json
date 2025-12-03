@@ -1,0 +1,14 @@
+{
+  "1362426428037271552": {
+    "welcome": {
+      "enabled": true,
+      "message": "Welcome {user} to **{server}**! We now have {membercount} members!",
+      "channelId": "1439243532215910550"
+    },
+    "leave": {
+      "enabled": true,
+      "message": "Goodbye {user}! We now have {membercount} members remaining.",
+      "channelId": "1445067087910408233"
+    }
+  }
+}

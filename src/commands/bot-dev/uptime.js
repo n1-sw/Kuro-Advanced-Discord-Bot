@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -36,7 +37,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Uptime command error:', error);
+            console.error(`[Command Error] uptime.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error checking uptime.', flags: 64 }).catch(() => {});
             }

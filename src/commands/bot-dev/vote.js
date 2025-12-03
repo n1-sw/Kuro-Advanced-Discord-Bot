@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -31,7 +32,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed], components: [row] });
         } catch (error) {
-            console.error('Vote command error:', error);
+            console.error(`[Command Error] vote.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error getting vote link.', flags: 64 }).catch(() => {});
             }

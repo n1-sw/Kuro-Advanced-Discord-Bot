@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed, successEmbed, errorEmbed } = require('../../utils/helpers');
 const { autoDeployCommands } = require('../../utils/autoDeploy');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -71,7 +72,7 @@ module.exports = {
             }
             
         } catch (error) {
-            console.error('Autoupdate command error:', error);
+            console.error(`[Command Error] autoupdate.js:`, error.message);
             try {
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
@@ -84,7 +85,6 @@ module.exports = {
                     });
                 }
             } catch (e) {
-                console.error('Failed to send error reply:', e.message);
             }
         }
     }

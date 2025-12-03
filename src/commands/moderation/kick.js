@@ -41,7 +41,7 @@ module.exports = {
                 embeds: [successEmbed(`**${target.user.tag}** has been kicked.\nReason: ${reason}`)] 
             });
         } catch (error) {
-            console.error('Kick error:', error);
+            console.error(`[Command Error] kick.js:`, error.message);
             await interaction.reply({ embeds: [errorEmbed('Failed to kick the user.')], flags: 64 });
         }
     }

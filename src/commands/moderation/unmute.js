@@ -32,7 +32,7 @@ module.exports = {
                 embeds: [successEmbed(`**${target.user.tag}** has been unmuted.`)] 
             });
         } catch (error) {
-            console.error('Unmute error:', error);
+            console.error(`[Command Error] unmute.js:`, error.message);
             await interaction.reply({ embeds: [errorEmbed('Failed to unmute the user.')], flags: 64 });
         }
     }

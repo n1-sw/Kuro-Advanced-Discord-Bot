@@ -6,6 +6,9 @@ let startTime = Date.now();
 let commandsProcessed = 0;
 let membersHelped = 0;
 let transactionsCount = 0;
+let metricsCache = null;
+let lastMetricsUpdate = 0;
+const METRICS_CACHE_TTL = 5000; // Cache metrics for 5 seconds to reduce CPU
 
 // Helper: Format bytes to readable format
 const formatBytes = (bytes) => {
@@ -44,8 +47,15 @@ const getBotHealth = (client) => {
     return { status: 'HEALTHY', emoji: '🟢', text: 'Healthy' };
 };
 
-// Get system metrics
+// Get system metrics with caching
 const getSystemMetrics = (client) => {
+    const now = Date.now();
+    
+    // Return cached metrics if still valid
+    if (metricsCache && (now - lastMetricsUpdate) < METRICS_CACHE_TTL) {
+        return metricsCache;
+    }
+
     const uptime = Date.now() - startTime;
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
@@ -57,7 +67,7 @@ const getSystemMetrics = (client) => {
     const cpuPercent = Math.round((cpuLoad[0] / os.cpus().length) * 100);
     
     const systemUptime = os.uptime() * 1000;
-    const systemUptimePercent = Math.round((systemUptime / (30 * 24 * 60 * 60 * 1000)) * 100); // 30-day baseline
+    const systemUptimePercent = Math.round((systemUptime / (30 * 24 * 60 * 60 * 1000)) * 100);
     
     const guildCount = client.guilds.cache.size;
     const userCount = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
@@ -65,7 +75,7 @@ const getSystemMetrics = (client) => {
     
     const hourlyCommandRate = Math.round((commandsProcessed / Math.max(1, uptime / 3600000)) * 10) / 10;
     
-    return {
+    metricsCache = {
         ramUsage: formatBytes(usedMem),
         ramPercent,
         freeRamPercent,
@@ -82,13 +92,24 @@ const getSystemMetrics = (client) => {
         hourlyCommandRate,
         health: getBotHealth(client)
     };
+    
+    lastMetricsUpdate = now;
+    return metricsCache;
 };
 
-// Get dynamic activities
+// Professional rotating activities with multiple status styles
 const getActivities = (client) => {
     const metrics = getSystemMetrics(client);
     
     return [
+        // ===== STREAMING STATUS STYLES =====
+        { 
+            name: `24/7 Bot Management`, 
+            type: ActivityType.Streaming,
+            url: 'https://twitch.tv/monstercat',
+            status: PresenceUpdateStatus.Online 
+        },
+        
         // ===== SYSTEM HEALTH =====
         { 
             name: `${metrics.health.text} | ${metrics.ramPercent}% RAM | ${metrics.cpuPercent}% CPU`, 
@@ -149,10 +170,32 @@ const getActivities = (client) => {
             status: PresenceUpdateStatus.Online 
         },
         
+        // ===== UNIQUE WORKING STATUS STYLES =====
+        { 
+            name: `Analyzing Guild Security`, 
+            type: ActivityType.Competing, 
+            status: PresenceUpdateStatus.Online 
+        },
+        { 
+            name: `Processing Member Profiles`, 
+            type: ActivityType.Watching, 
+            status: PresenceUpdateStatus.Online 
+        },
+        { 
+            name: `Scanning for Threats`, 
+            type: ActivityType.Watching, 
+            status: PresenceUpdateStatus.Online 
+        },
+        { 
+            name: `Optimizing Performance`, 
+            type: ActivityType.Playing, 
+            status: PresenceUpdateStatus.Online 
+        },
+        
         // ===== USEFUL CALLS-TO-ACTION =====
         { 
             name: `/help to see all commands!`, 
-            type: ActivityType.Watching, 
+            type: ActivityType.Listening, 
             status: PresenceUpdateStatus.Online 
         },
         { 
@@ -162,7 +205,7 @@ const getActivities = (client) => {
         },
         { 
             name: `/economy to start earning!`, 
-            type: ActivityType.Playing, 
+            type: ActivityType.Listening, 
             status: PresenceUpdateStatus.Online 
         },
         { 
@@ -186,6 +229,16 @@ const getActivities = (client) => {
             name: `Auto-Moderation Scanning...`, 
             type: ActivityType.Watching, 
             status: PresenceUpdateStatus.Online 
+        },
+        { 
+            name: `Leveling System Running`, 
+            type: ActivityType.Playing, 
+            status: PresenceUpdateStatus.Online 
+        },
+        { 
+            name: `Economy Engine Active`, 
+            type: ActivityType.Competing, 
+            status: PresenceUpdateStatus.Online 
         }
     ];
 };
@@ -193,72 +246,110 @@ const getActivities = (client) => {
 const getStatusEmoji = (status) => {
     switch (status) {
         case PresenceUpdateStatus.Online:
-            return '🟢 Online';
+            return 'Online';
         case PresenceUpdateStatus.Idle:
-            return '🟡 Idle';
+            return 'Idle';
         case PresenceUpdateStatus.DoNotDisturb:
-            return '🔴 Do Not Disturb';
+            return 'Do Not Disturb';
         case PresenceUpdateStatus.Invisible:
-            return '⚫ Invisible';
+            return 'Invisible';
         default:
-            return '🟢 Online';
+            return 'Online';
     }
 };
 
 const getActivityTypeText = (type) => {
     switch (type) {
         case ActivityType.Playing:
-            return '▶️ Playing';
+            return 'Playing';
         case ActivityType.Listening:
-            return '🎧 Listening to';
+            return 'Listening to';
         case ActivityType.Watching:
-            return '👀 Watching';
+            return 'Watching';
         case ActivityType.Competing:
-            return '🏆 Competing in';
+            return 'Competing in';
         case ActivityType.Streaming:
-            return '📡 Streaming';
+            return 'Streaming';
         default:
-            return '•';
+            return 'Activity';
     }
 };
 
 const setAdvancedActivity = (client) => {
-    const activities = getActivities(client);
-    const activity = activities[currentActivityIndex];
-    
     try {
-        client.user.setPresence({
+        if (!client || !client.user) return;
+        
+        const activities = getActivities(client);
+        const activity = activities[currentActivityIndex];
+        
+        if (!activity) return;
+
+        const presenceData = {
             activities: [{
                 name: activity.name,
                 type: activity.type,
                 url: activity.url || undefined
             }],
             status: activity.status
-        });
-        
-        console.log(`🎰 RPC Updated: ${getActivityTypeText(activity.type)} ${activity.name} | ${getStatusEmoji(activity.status)}`);
+        };
+
+        // Handle setPresence with proper Promise handling
+        Promise.resolve(client.user.setPresence(presenceData))
+            .then(() => {
+                console.log(`RPC Updated: ${getActivityTypeText(activity.type)} ${activity.name} | ${getStatusEmoji(activity.status)}`);
+            })
+            .catch(err => {
+                if (err && err.code !== 'ERR_NETWORK') {
+                    // Silently ignore errors to avoid spam
+                }
+            });
         
         currentActivityIndex = (currentActivityIndex + 1) % activities.length;
     } catch (error) {
-        console.error('Error setting activity:', error.message);
+        console.error('Error in setAdvancedActivity:', error.message);
     }
 };
 
 const startRPCRotation = (client) => {
+    if (!client || !client.user) {
+        console.warn('RPC: Client not ready yet');
+        return null;
+    }
+
     // Set initial activity immediately
     setAdvancedActivity(client);
     
-    // Update every 12 seconds for smooth rotation
+    // Update every 15 seconds for smooth rotation (optimized for 24/7 hosting)
     const rpcInterval = setInterval(() => {
-        setAdvancedActivity(client);
-    }, 12000);
+        try {
+            setAdvancedActivity(client);
+        } catch (error) {
+            console.error('RPC rotation error:', error.message);
+        }
+    }, 15000);
     
-    // Store interval on client for cleanup if needed
+    // Store interval on client for cleanup
     client.rpcInterval = rpcInterval;
     
-    console.log('🎮 Advanced RPC System Started');
-    console.log('   📊 Tracking: Health | Performance | Uptime | Servers | Members | Commands | Features');
-    console.log('   🔄 Rotating Status Every 12 Seconds');
+    console.log('Advanced RPC System Started');
+    console.log('   Tracking: Health | Performance | Uptime | Servers | Members | Commands');
+    console.log('   Rotating Status Every 15 Seconds');
+    console.log('   Optimized for 24/7 Continuous Hosting');
+    
+    return rpcInterval;
+};
+
+// Cleanup function for graceful shutdown
+const stopRPCRotation = (client) => {
+    if (client && client.rpcInterval) {
+        clearInterval(client.rpcInterval);
+        client.rpcInterval = null;
+        console.log('RPC rotation stopped');
+    }
+    
+    // Clear caches
+    metricsCache = null;
+    lastMetricsUpdate = 0;
 };
 
 // Export functions to track metrics from other modules
@@ -269,8 +360,22 @@ const incrementCommands = (count = 1) => { commandsProcessed += count; };
 const incrementMembers = (count = 1) => { membersHelped += count; };
 const incrementTransactions = (count = 1) => { transactionsCount += count; };
 
+// Reset daily stats to prevent overflow
+const resetDailyStats = () => {
+    membersHelped = 0;
+    transactionsCount = 0;
+    console.log('Daily stats reset');
+};
+
+// Memory optimization: Run garbage collection hints
+const optimizeMemory = () => {
+    metricsCache = null;
+    lastMetricsUpdate = 0;
+};
+
 module.exports = {
     startRPCRotation,
+    stopRPCRotation,
     setAdvancedActivity,
     getSystemMetrics,
     getBotHealth,
@@ -279,5 +384,7 @@ module.exports = {
     trackTransaction,
     incrementCommands,
     incrementMembers,
-    incrementTransactions
+    incrementTransactions,
+    resetDailyStats,
+    optimizeMemory
 };

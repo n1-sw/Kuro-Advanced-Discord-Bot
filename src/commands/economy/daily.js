@@ -1,7 +1,9 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { successEmbed, errorEmbed, formatNumber, formatDuration } = require('../../utils/helpers');
+const { formatNumber, formatDuration } = require('../../utils/helpers');
 const { users } = require('../../utils/database');
 const config = require('../../config');
+const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,34 +16,39 @@ module.exports = {
             const now = Date.now();
             const cooldown = 24 * 60 * 60 * 1000;
             
+            if (!userData.dailyStreak) userData.dailyStreak = 0;
+            
             if (now - userData.lastDaily < cooldown) {
                 const remaining = cooldown - (now - userData.lastDaily);
-                return interaction.reply({ 
-                    embeds: [errorEmbed(`You can claim your daily reward in ${formatDuration(remaining)}.`)],
-                    flags: 64
-                });
+                const embed = AdvancedEmbed.warning('Daily Reward', `You've already claimed your daily reward!\n\nNext claim in: \`${formatDuration(remaining)}\``);
+                return interaction.reply({ embeds: [embed], flags: 64 });
             }
             
-            const bonus = Math.floor(userData.level * 10);
-            const reward = config.economy.dailyReward + bonus;
+            userData.dailyStreak++;
+            const baseReward = config.economy.dailyReward;
+            const levelBonus = Math.floor(userData.level * 10);
+            const streakBonus = Math.floor(userData.dailyStreak * 5);
+            const totalReward = baseReward + levelBonus + streakBonus;
             
-            userData.coins += reward;
+            userData.coins += totalReward;
             userData.lastDaily = now;
             users.save();
             
-            await interaction.reply({ 
-                embeds: [successEmbed(
-                    `You claimed your daily reward of **${formatNumber(reward)} coins**!\n` +
-                    (bonus > 0 ? `(Base: ${config.economy.dailyReward} + Level Bonus: ${bonus})` : '') +
-                    `\nNew balance: **${formatNumber(userData.coins)} coins**`
-                )] 
-            });
+            const embed = AdvancedEmbed.economy(`Daily Reward Claimed`, `💝 You earned \`${formatNumber(totalReward)}\` coins!`, [
+                { name: `${emoji.coin} Base Reward`, value: `\`${formatNumber(baseReward)}\``, inline: true },
+                { name: `${emoji.leveling} Level Bonus`, value: `\`+${formatNumber(levelBonus)}\``, inline: true },
+                { name: `${emoji.fire} Streak Bonus`, value: `\`+${formatNumber(streakBonus)}\``, inline: true },
+                { name: `💰 New Balance`, value: `\`${formatNumber(userData.coins)}\` coins`, inline: false },
+                { name: `🔥 Streak`, value: `\`${userData.dailyStreak}\` days`, inline: true }
+            ]);
+            
+            await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in daily command:', error);
-            await interaction.reply({
-                embeds: [errorEmbed('Error claiming daily reward.')],
-                flags: 64
-            }).catch(() => {});
+            console.error(`[Command Error] daily.js:`, error.message);
+            const embed = AdvancedEmbed.commandError('Daily Reward Failed', 'Could not claim your daily reward');
+            if (!interaction.replied) {
+                await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+            }
         }
     }
 };

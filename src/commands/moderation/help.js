@@ -1,194 +1,146 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('📖 View all available commands with detailed info'),
+        .setDescription('View all available commands'),
     
     async execute(interaction) {
-        // Dynamic command data synced with actual commands
         const commands = {
             moderation: {
-                name: `${emoji.moderation} Moderation`,
+                name: 'Moderation',
                 emoji: emoji.moderation,
-                color: 0xFF6B6B,
-                icon: '🛡️',
+                color: emoji.color_error,
                 description: 'Server safety and member management',
                 commands: [
-                    { cmd: '/ban', desc: 'Ban a user from the server permanently' },
+                    { cmd: '/ban', desc: 'Ban a user from the server' },
                     { cmd: '/kick', desc: 'Kick a user from the server' },
-                    { cmd: '/mute', desc: 'Timeout a member (max 28 days)' },
+                    { cmd: '/mute', desc: 'Timeout a member' },
                     { cmd: '/unmute', desc: 'Remove timeout from a user' },
-                    { cmd: '/warn', desc: 'Warn a member with reason' },
-                    { cmd: '/warnings', desc: 'View all warnings for a user' },
-                    { cmd: '/clearwarnings', desc: 'Clear all warnings for a user' },
-                    { cmd: '/modlogs', desc: 'View detailed moderation logs' },
-                    { cmd: '/purge', desc: 'Delete 1-100 messages in bulk' },
-                    { cmd: '/automod', desc: 'Configure auto-moderation settings' }
+                    { cmd: '/warn', desc: 'Warn a member' },
+                    { cmd: '/warnings', desc: 'View warnings for a user' },
+                    { cmd: '/clearwarnings', desc: 'Clear all warnings' },
+                    { cmd: '/modlogs', desc: 'View moderation logs' },
+                    { cmd: '/purge', desc: 'Delete messages in bulk' },
+                    { cmd: '/automod', desc: 'Configure auto-moderation' }
                 ]
             },
             leveling: {
-                name: `${emoji.leveling} Leveling`,
+                name: 'Leveling',
                 emoji: emoji.leveling,
-                color: 0x4ECDC4,
-                icon: '📊',
+                color: emoji.color_success,
                 description: 'Progression and ranking system',
                 commands: [
-                    { cmd: '/rank', desc: 'Check your level, XP, and rank' },
-                    { cmd: '/leaderboard', desc: 'View server leaderboard (levels/coins)' }
+                    { cmd: '/rank', desc: 'View your detailed rank card' },
+                    { cmd: '/leaderboard', desc: 'View server leaderboard' }
                 ]
             },
             economy: {
-                name: `${emoji.economy} Economy`,
+                name: 'Economy',
                 emoji: emoji.economy,
-                color: 0xFFD93D,
-                icon: '💰',
+                color: emoji.color_warning,
                 description: 'Coins, shop, and transactions',
                 commands: [
                     { cmd: '/balance', desc: 'Check your coin balance' },
-                    { cmd: '/daily', desc: 'Claim daily reward + level bonus' },
+                    { cmd: '/daily', desc: 'Claim daily reward' },
                     { cmd: '/give', desc: 'Transfer coins to another user' },
                     { cmd: '/shop', desc: 'Browse items for purchase' },
-                    { cmd: '/buy', desc: 'Purchase an item from the shop' },
-                    { cmd: '/sell', desc: 'Sell inventory items (50% value)' },
-                    { cmd: '/inventory', desc: 'View your purchased items' }
+                    { cmd: '/buy', desc: 'Purchase an item' },
+                    { cmd: '/sell', desc: 'Sell inventory items' },
+                    { cmd: '/inventory', desc: 'View your items' }
                 ]
             },
             mail: {
-                name: `${emoji.mail} Mail System`,
+                name: 'Mail System',
                 emoji: emoji.mail,
-                color: 0x6BCB77,
-                icon: '📬',
+                color: emoji.color_info,
                 description: 'Private messaging between members',
                 commands: [
-                    { cmd: '/send', desc: 'Send private mail to another user' },
-                    { cmd: '/inbox', desc: 'View your inbox with read/unread status' },
-                    { cmd: '/read', desc: 'Read a specific mail message' },
-                    { cmd: '/deletemail', desc: 'Delete a mail from your inbox' }
+                    { cmd: '/send', desc: 'Send private mail' },
+                    { cmd: '/inbox', desc: 'View your inbox' },
+                    { cmd: '/read', desc: 'Read a mail message' },
+                    { cmd: '/deletemail', desc: 'Delete a mail' }
                 ]
             },
             games: {
-                name: `${emoji.games} Mini-Games`,
+                name: 'Mini-Games',
                 emoji: emoji.games,
-                color: 0xA78BFA,
-                icon: '🎮',
-                description: 'Fun gambling and gaming commands',
+                color: emoji.color_primary,
+                description: 'Fun gaming commands',
                 commands: [
-                    { cmd: '/coinflip', desc: 'Flip a coin and double or lose your bet' },
+                    { cmd: '/coinflip', desc: 'Flip a coin and bet' },
                     { cmd: '/dice', desc: 'Roll dice against the bot' },
-                    { cmd: '/slots', desc: 'Play the 3-reel slot machine (10x jackpot!)' },
-                    { cmd: '/gamble', desc: 'High-risk bet with 45% win chance (2x payout)' }
+                    { cmd: '/slots', desc: 'Play slot machine' },
+                    { cmd: '/gamble', desc: 'High-risk betting' },
+                    { cmd: '/snake', desc: 'Play Snake game' },
+                    { cmd: '/tictactoe', desc: 'Play Tic-Tac-Toe' },
+                    { cmd: '/chess', desc: 'Play Chess' }
                 ]
             },
-            'botdev': {
-                name: `${emoji.botdev} Bot Developer`,
+            botdev: {
+                name: 'Bot Utilities',
                 emoji: emoji.botdev,
-                color: 0x43B581,
-                icon: '⚙️',
-                description: 'Bot utilities and information',
+                color: emoji.color_success,
+                description: 'Bot information and utilities',
                 commands: [
-                    { cmd: '/ping', desc: 'Check bot latency and response time' },
-                    { cmd: '/uptime', desc: 'View bot uptime and system stats' },
-                    { cmd: '/botinfo', desc: 'View detailed bot information' },
-                    { cmd: '/ownerinfo', desc: 'View bot owner information' },
-                    { cmd: '/invite', desc: 'Get the bot invite link' },
-                    { cmd: '/vote', desc: 'Vote for the bot on top.gg' },
-                    { cmd: '/refresh', desc: 'Refresh bot systems and cache' },
-                    { cmd: '/autosync', desc: 'Toggle auto-command sync' },
-                    { cmd: '/autoupdate', desc: 'Toggle auto-update system' },
-                    { cmd: '/updatecheck', desc: 'Check if bot updates are needed' }
+                    { cmd: '/ping', desc: 'Check bot latency' },
+                    { cmd: '/uptime', desc: 'View bot uptime' },
+                    { cmd: '/botinfo', desc: 'View bot information' },
+                    { cmd: '/ownerinfo', desc: 'View bot owner info' },
+                    { cmd: '/invite', desc: 'Get invite link' },
+                    { cmd: '/vote', desc: 'Vote for the bot' },
+                    { cmd: '/refresh', desc: 'Refresh bot systems' },
+                    { cmd: '/autosync', desc: 'Toggle auto-sync' },
+                    { cmd: '/autoupdate', desc: 'Toggle auto-update' },
+                    { cmd: '/updatecheck', desc: 'Check for updates' }
                 ]
             },
             'server-management': {
-                name: `${emoji.admin} Server Management`,
+                name: 'Server Management',
                 emoji: emoji.admin,
-                color: 0xFF6B9D,
-                icon: '👑',
-                description: 'Server configuration and customization',
+                color: emoji.color_error,
+                description: 'Server configuration',
                 commands: [
-                    { cmd: '/welcome', desc: 'Set auto welcome/leave messages' },
-                    { cmd: '/userinfo', desc: 'View detailed user profile info' },
-                    { cmd: '/serverinfo', desc: 'View detailed server information' },
-                    { cmd: '/autoreact', desc: 'Setup keyword emoji auto-reactions' }
+                    { cmd: '/welcome', desc: 'Set welcome/leave messages' },
+                    { cmd: '/userinfo', desc: 'View user profile' },
+                    { cmd: '/serverinfo', desc: 'View server info' },
+                    { cmd: '/autoreact', desc: 'Setup auto-reactions' }
                 ]
             }
         };
 
-        // Main embed with overview
+        const totalCommands = Object.values(commands).reduce((acc, cat) => acc + cat.commands.length, 0);
+
         const mainEmbed = new EmbedBuilder()
-            .setTitle(`🌟 ${interaction.client.user.username} - Command Center`)
-            .setDescription(`
-**Welcome to the Ultimate Command Guide!**
-
-Select a category below to explore commands. This bot features:
-✨ 42 Slash Commands | 🛡️ Advanced Moderation | 💰 Economy System
-📊 Leveling System | 📬 Mail System | 🎮 Mini-Games | ⚙️ Auto Systems
-
-*All features are fully functional and production-ready!*
-            `)
-            .setColor(0x2C2F33)
+            .setTitle(`${emoji.book} ${interaction.client.user.username} Commands`)
+            .setDescription(`Select a category below to view commands.\n\n${emoji.star} **Total:** ${totalCommands} commands available`)
+            .setColor(emoji.color_success)
             .addFields(
-                { name: '🛡️ Moderation', value: '10 commands', inline: true },
-                { name: '📊 Leveling', value: '2 commands', inline: true },
-                { name: '💰 Economy', value: '7 commands', inline: true },
-                { name: '📬 Mail System', value: '4 commands', inline: true },
-                { name: '🎮 Mini-Games', value: '4 commands', inline: true },
-                { name: '⚙️ Bot Developer', value: '10 commands', inline: true },
-                { name: '👑 Server Management', value: '4 commands', inline: true },
-                { name: '📈 Total Commands', value: '**42 Commands**', inline: false }
+                { name: `${emoji.moderation} Moderation`, value: `${commands.moderation.commands.length} cmds`, inline: true },
+                { name: `${emoji.leveling} Leveling`, value: `${commands.leveling.commands.length} cmds`, inline: true },
+                { name: `${emoji.economy} Economy`, value: `${commands.economy.commands.length} cmds`, inline: true },
+                { name: `${emoji.mail} Mail`, value: `${commands.mail.commands.length} cmds`, inline: true },
+                { name: `${emoji.games} Games`, value: `${commands.games.commands.length} cmds`, inline: true },
+                { name: `${emoji.botdev} Utilities`, value: `${commands.botdev.commands.length} cmds`, inline: true },
+                { name: `${emoji.admin} Server`, value: `${commands['server-management'].commands.length} cmds`, inline: true }
             )
-            .setFooter({ text: '✨ Click the dropdown to explore categories ✨', iconURL: interaction.client.user.displayAvatarURL() })
             .setThumbnail(interaction.client.user.displayAvatarURL({ size: 256 }))
+            .setFooter({ text: 'Use the dropdown to explore categories', iconURL: interaction.client.user.displayAvatarURL() })
             .setTimestamp();
 
-        // Select menu options
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('help_select')
-            .setPlaceholder('📚 Select a command category...')
+            .setPlaceholder('Select a category...')
             .addOptions([
-                {
-                    label: '🛡️ Moderation',
-                    value: 'moderation',
-                    emoji: emoji.moderation,
-                    description: 'Ban, kick, warn, and manage members'
-                },
-                {
-                    label: '📊 Leveling',
-                    value: 'leveling',
-                    emoji: emoji.leveling,
-                    description: 'Check rank and view leaderboards'
-                },
-                {
-                    label: '💰 Economy',
-                    value: 'economy',
-                    emoji: emoji.economy,
-                    description: 'Coins, shop, buy, sell, and rewards'
-                },
-                {
-                    label: '📬 Mail System',
-                    value: 'mail',
-                    emoji: emoji.mail,
-                    description: 'Send and receive private messages'
-                },
-                {
-                    label: '🎮 Mini-Games',
-                    value: 'games',
-                    emoji: emoji.games,
-                    description: 'Coinflip, dice, slots, and gambling'
-                },
-                {
-                    label: '⚙️ Bot Developer',
-                    value: 'botdev',
-                    emoji: emoji.botdev,
-                    description: 'Bot utilities and information'
-                },
-                {
-                    label: '👑 Server Management',
-                    value: 'server-management',
-                    emoji: emoji.admin,
-                    description: 'Configure welcome, auto-react, and more'
-                }
+                { label: 'Moderation', value: 'moderation', emoji: emoji.moderation, description: 'Ban, kick, warn, mute' },
+                { label: 'Leveling', value: 'leveling', emoji: emoji.leveling, description: 'Rank and leaderboards' },
+                { label: 'Economy', value: 'economy', emoji: emoji.economy, description: 'Coins and shop' },
+                { label: 'Mail System', value: 'mail', emoji: emoji.mail, description: 'Private messages' },
+                { label: 'Mini-Games', value: 'games', emoji: emoji.games, description: 'Fun games to play' },
+                { label: 'Bot Utilities', value: 'botdev', emoji: emoji.botdev, description: 'Bot info and settings' },
+                { label: 'Server Management', value: 'server-management', emoji: emoji.admin, description: 'Server configuration' }
             ]);
 
         const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -199,14 +151,12 @@ Select a category below to explore commands. This bot features:
                 components: [row]
             });
 
-            const collector = response.createMessageComponentCollector({
-                time: 180000 // 3 minutes
-            });
+            const collector = response.createMessageComponentCollector({ time: 180000 });
 
             collector.on('collect', async (selectInteraction) => {
                 if (selectInteraction.user.id !== interaction.user.id) {
                     return selectInteraction.reply({
-                        content: `${emoji.blocked} This menu is for ${interaction.user} only!`,
+                        content: `${emoji.error} This menu is for ${interaction.user} only!`,
                         flags: 64
                     });
                 }
@@ -214,29 +164,18 @@ Select a category below to explore commands. This bot features:
                 const selected = selectInteraction.values[0];
                 const category = commands[selected];
 
-                // Build command list with better formatting
                 const commandsList = category.commands
-                    .map((cmd, idx) => `\`${String(idx + 1).padStart(2, '0')}.\` ${cmd.cmd}\n   ➜ ${cmd.desc}`)
-                    .join('\n\n');
+                    .map((cmd, idx) => `\`${idx + 1}.\` **${cmd.cmd}** - ${cmd.desc}`)
+                    .join('\n');
 
                 const categoryEmbed = new EmbedBuilder()
                     .setTitle(`${category.emoji} ${category.name}`)
-                    .setDescription(`
-${category.icon} **${category.description}**
-${'━'.repeat(50)}
-
-${commandsList}
-
-${'━'.repeat(50)}
-                    `)
+                    .setDescription(`**${category.description}**\n\n${commandsList}`)
                     .setColor(category.color)
-                    .setFooter({ text: `${category.commands.length} commands available • Use the dropdown to switch categories`, iconURL: interaction.client.user.displayAvatarURL() })
+                    .setFooter({ text: `${category.commands.length} commands`, iconURL: interaction.client.user.displayAvatarURL() })
                     .setTimestamp();
 
-                await selectInteraction.update({
-                    embeds: [categoryEmbed],
-                    components: [row]
-                });
+                await selectInteraction.update({ embeds: [categoryEmbed], components: [row] });
             });
 
             collector.on('end', () => {
@@ -245,14 +184,10 @@ ${'━'.repeat(50)}
                 response.edit({ components: [disabledRow] }).catch(() => {});
             });
         } catch (error) {
-            console.error('Help command error:', error);
+            console.error(`[Command Error] help.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ 
-                    embeds: [new EmbedBuilder()
-                        .setTitle(`${emoji.error} Error`)
-                        .setDescription('Failed to display help menu')
-                        .setColor(0xFF0000)
-                    ], 
+                    content: `${emoji.error} Failed to display help menu.`, 
                     flags: 64 
                 });
             }

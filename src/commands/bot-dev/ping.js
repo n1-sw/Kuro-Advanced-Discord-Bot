@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { createEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -9,27 +9,39 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const sent = await interaction.reply({ content: 'Calculating ping...', flags: 64, fetchReply: true });
-            const ping = sent.createdTimestamp - interaction.createdTimestamp;
+            await interaction.reply({ content: `${emoji.pending} Calculating...` });
+            const msg = await interaction.fetchReply();
+            const ping = msg.createdTimestamp - interaction.createdTimestamp;
             const apiPing = interaction.client.ws.ping;
             
-            const embed = createEmbed({
-                title: `${emoji.trophy} Ping Test`,
-                description: 'Bot latency measurements:',
-                color: 0x00FF00,
-                fields: [
-                    { name: 'Message Latency', value: `${ping}ms`, inline: true },
-                    { name: 'API Latency', value: `${apiPing}ms`, inline: true },
-                    { name: 'Status', value: ping < 100 ? `${emoji.success} Excellent` : ping < 200 ? `${emoji.warning} Good` : `${emoji.error} High`, inline: true }
-                ],
-                footer: 'Lower latency = Better response time'
-            });
+            let statusText;
+            if (ping < 100 && apiPing < 100) {
+                statusText = 'Excellent';
+            } else if (ping < 200 && apiPing < 200) {
+                statusText = 'Good';
+            } else {
+                statusText = 'High Latency';
+            }
+            
+            const rawQuality = Math.floor((500 - (ping + apiPing)) / 5);
+            const qualityPercent = Math.max(0, Math.min(100, rawQuality));
+            const filled = Math.max(0, Math.min(10, Math.floor(qualityPercent / 10)));
+            const bar = `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`;
+            
+            const embed = AdvancedEmbed.stats(`⚡ Network Performance`, {
+                '🔴 Bot Response': `${ping}ms`,
+                '🌐 Discord API': `${apiPing}ms`,
+                '📊 Connection': statusText,
+                '⏱️ Average': `${Math.round((ping + apiPing) / 2)}ms`
+            }, ping < 100 ? emoji.color_success : emoji.color_warning)
+            .setDescription(`**Connection Quality:**\n\`${bar}\` ${qualityPercent}%`);
             
             await interaction.editReply({ content: null, embeds: [embed] });
         } catch (error) {
-            console.error('Ping command error:', error);
+            console.error(`[Command Error] ping.js:`, error.message);
+            const embed = AdvancedEmbed.commandError('Network Diagnostics Failed', 'Could not calculate ping');
             if (!interaction.replied) {
-                await interaction.reply({ content: 'Error checking ping.', flags: 64 }).catch(() => {});
+                await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
             }
         }
     }

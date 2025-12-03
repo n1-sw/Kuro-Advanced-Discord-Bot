@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed, errorEmbed } = require('../../utils/helpers');
 const { mail } = require('../../utils/database');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -66,7 +67,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed], flags: 64 });
         } catch (error) {
-            console.error('Read command error:', error);
+            console.error(`[Command Error] read.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error reading mail.', flags: 64 }).catch(() => {});
             }

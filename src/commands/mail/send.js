@@ -54,7 +54,7 @@ module.exports = {
                 await target.send(`You have new mail in **${interaction.guild.name}**! Use \`/inbox\` to check.`);
             } catch (e) {}
         } catch (error) {
-            console.error('Send command error:', error);
+            console.error(`[Command Error] send.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error sending mail.', flags: 64 }).catch(() => {});
             }

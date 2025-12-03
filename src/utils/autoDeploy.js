@@ -116,13 +116,6 @@ async function startAutoRefreshSchedule(client, token, clientId, intervalMs = 36
     const minutes = Math.floor(intervalMs / 60000);
     console.log(`✅ AUTO-REFRESH: Scheduled to sync every ${minutes} minute(s)`);
 
-    // Send initial webhook notification
-    if (client.webhookLogger && client.webhookLogger.enabled) {
-        await client.webhookLogger.sendInfo('Auto-Refresh Enabled', `Slash commands will auto-sync every ${minutes} minute(s)`, {
-            info: 'Auto-refresh system is active and monitoring for command changes'
-        });
-    }
-
     const intervalId = setInterval(async () => {
         console.log(`${emoji.refresh} AUTO-REFRESH: Running command sync...`);
         try {
@@ -143,13 +136,6 @@ async function startAutoRefreshSchedule(client, token, clientId, intervalMs = 36
             );
 
             console.log(`✅ AUTO-REFRESH: ${data.length} commands synced successfully`);
-            
-            // Log successful sync to webhook
-            if (client.webhookLogger && client.webhookLogger.enabled) {
-                await client.webhookLogger.sendInfo('Auto-Refresh Complete', `Successfully synced ${data.length} slash commands`, {
-                    info: `Last sync: ${new Date().toISOString()}`
-                });
-            }
         } catch (e) {
             console.error('AUTO-REFRESH: Error during sync:', e.message);
             if (client.webhookLogger && client.webhookLogger.enabled) {

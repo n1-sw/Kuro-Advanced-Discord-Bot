@@ -27,7 +27,7 @@ module.exports = {
             const userChoice = interaction.options.getString('choice');
             const amount = interaction.options.getInteger('amount');
             
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.coins < amount) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
@@ -54,7 +54,7 @@ module.exports = {
             
             users.save();
         } catch (error) {
-            console.error('Coinflip command error:', error);
+            console.error(`[Command Error] coinflip.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error playing coinflip.', flags: 64 }).catch(() => {});
             }

@@ -1,5 +1,6 @@
 const { antiNukeTracking } = require('../utils/database');
 const config = require('../config');
+const emoji = require('../utils/emoji');
 
 module.exports = {
     name: 'roleDelete',
@@ -30,7 +31,7 @@ module.exports = {
                 
                 if (executorMember && executorMember.bannable) {
                     await executorMember.ban({ reason: 'Anti-nuke: Mass role deletion detected' });
-                    console.log(`✅ Anti-nuke: Banned ${executor.tag} for mass role deletion`);
+                    console.log(`${emoji.success} Anti-nuke: Banned ${executor.tag} for mass role deletion`);
                 }
             }
         } catch (error) {

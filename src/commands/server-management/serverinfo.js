@@ -21,14 +21,14 @@ module.exports = {
                     { name: 'Member Count', value: String(guild.memberCount), inline: true },
                     { name: 'Channels', value: String(guild.channels.cache.size), inline: true },
                     { name: 'Roles', value: String(guild.roles.cache.size), inline: true },
-                    { name: 'Verification Level', value: guild.verificationLevel || 'None', inline: true },
+                    { name: 'Verification Level', value: String(guild.verificationLevel || 'None'), inline: true },
                     { name: 'Region', value: guild.preferredLocale || 'Auto-detected', inline: true }
                 ]
             });
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in serverinfo command:', error);
+            console.error(`[Command Error] serverinfo.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error retrieving server information.')],
                 flags: 64

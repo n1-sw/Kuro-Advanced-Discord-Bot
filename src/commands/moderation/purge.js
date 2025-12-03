@@ -7,10 +7,10 @@ module.exports = {
         .setDescription('Delete multiple messages')
         .addIntegerOption(option =>
             option.setName('amount')
-                .setDescription('Number of messages to delete (1-100)')
+                .setDescription('Number of messages to delete (1-9000)')
                 .setRequired(true)
                 .setMinValue(1)
-                .setMaxValue(100))
+                .setMaxValue(9000))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
     
     async execute(interaction) {
@@ -24,7 +24,7 @@ module.exports = {
                 flags: 64
             });
         } catch (error) {
-            console.error('Purge error:', error);
+            console.error(`[Command Error] purge.js:`, error.message);
             await interaction.reply({ 
                 embeds: [errorEmbed('Failed to delete messages. Messages older than 14 days cannot be bulk deleted.')],
                 flags: 64 

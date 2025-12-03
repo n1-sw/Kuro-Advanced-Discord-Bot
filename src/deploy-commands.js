@@ -46,11 +46,11 @@ const rest = new REST({ version: '10' }).setToken(token);
             { body: commands },
         );
 
-        console.log(`\n✅ Successfully deployed ${data.length} slash commands!`);
+        console.log(`\nSuccessfully deployed ${data.length} slash commands!`);
         console.log('Commands deployed:');
         data.forEach(cmd => console.log(`  - /${cmd.name}`));
     } catch (error) {
-        console.error('\n❌ Deployment failed:');
+        console.error('\nDeployment failed:');
         console.error(error.message);
         if (error.code) console.error(`Error code: ${error.code}`);
         process.exit(1);

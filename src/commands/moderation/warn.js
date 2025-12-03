@@ -33,7 +33,7 @@ module.exports = {
             return interaction.reply({ embeds: [errorEmbed('You cannot warn bots.')], flags: 64 });
         }
         
-        const userData = users.get(interaction.guild.id, target.id);
+        const data = users.get(interaction.guild.id, target.id);
         userData.warnings.push({
             reason,
             moderator: interaction.user.id,

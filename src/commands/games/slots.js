@@ -3,6 +3,7 @@ const { createEmbed, errorEmbed, formatNumber, randomInt } = require('../../util
 const { users } = require('../../utils/database');
 const config = require('../../config');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -20,13 +21,13 @@ module.exports = {
             const amount = interaction.options.getInteger('amount');
             const { jackpotMultiplier } = config.games.slots;
             
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.coins < amount) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
             }
             
-            const symbols = ['7️⃣', '🍒', '🍋', '🍊', '🍇'];
+            const symbols = [emoji.slot_seven, emoji.slot_cherry, emoji.slot_lemon, emoji.slot_orange, emoji.slot_grape];
             const weights = [5, 15, 25, 30, 25];
             
             const getSymbol = () => {
@@ -65,17 +66,12 @@ module.exports = {
             userData.coins += winnings;
             users.save();
             
-            const color = winnings > 0 ? 0x00ff00 : 0xff0000;
+            const color = winnings > 0 ? emoji.color_success : emoji.color_error;
+            const resultTitle = winnings > 0 ? `🎰 ${winnings === amount * (config.games.slots.jackpotMultiplier || 10) ? 'JACKPOT!!!!' : 'YOU WON!'}` : `🎰 Better Luck Next Time`;
             
-            const embed = createEmbed({
-                title: `${emoji.gamble} Slot Machine`,
-                description: `${slotDisplay}\n\n${resultMessage}\n\nNew balance: **${formatNumber(userData.coins)} coins**`,
-                color
-            });
-            
-            await interaction.reply({ embeds: [embed] });
+const embed = AdvancedEmbed.commandSuccess('Operation Complete', 'Success');
         } catch (error) {
-            console.error('Error in slots command:', error);
+            console.error(`[Command Error] slots.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error playing slots.')],
                 flags: 64

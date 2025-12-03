@@ -20,7 +20,7 @@ module.exports = {
                 return interaction.reply({ embeds: [errorEmbed('User not found in this server.')], flags: 64 });
             }
             
-            const userData = users.get(interaction.guild.id, target.id);
+            const data = users.get(interaction.guild.id, target.id);
             const warningCount = userData.warnings.length;
             
             if (warningCount === 0) {
@@ -36,7 +36,7 @@ module.exports = {
                 embeds: [successEmbed(`Cleared ${warningCount} warning(s) from **${target.user.tag}**.`)] 
             });
         } catch (error) {
-            console.error('Error in clearwarnings command:', error);
+            console.error(`[Command Error] clearwarnings.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error clearing warnings.')],
                 flags: 64

@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { getAutoRefreshStatus } = require('../../utils/autoDeploy');
 
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('autosync')
@@ -9,54 +10,27 @@ module.exports = {
     
     async execute(interaction, client) {
         try {
-            const status = getAutoRefreshStatus();
+            const status = getAutoRefreshStatus() || { enabled: true, interval: 60 };
             
-            const embed = new EmbedBuilder()
-                .setTitle(`${emoji.settings} Auto-Refresh Status`)
-                .setColor(0x0099FF)
-                .setTimestamp()
-                .addFields(
-                    {
-                        name: `${emoji.refresh} Status`,
-                        value: status.lastRefresh ? `${emoji.success} Active` : `${emoji.pending} Pending`,
-                        inline: true
-                    },
-                    {
-                        name: `${emoji.status} Total Syncs`,
-                        value: String(status.totalRefreshes),
-                        inline: true
-                    },
-                    {
-                        name: `${emoji.timer} Last Refresh`,
-                        value: status.lastRefresh 
-                            ? `<t:${Math.floor(status.lastRefresh.getTime() / 1000)}:R>` 
-                            : 'Never',
-                        inline: true
-                    },
-                    {
-                        name: `${emoji.info} Info`,
-                        value: 'Commands sync automatically every hour (3600 seconds)',
-                        inline: false
-                    }
-                );
+            const embed = AdvancedEmbed.commandSuccess('Auto-Sync Status', 
+                `${status.enabled ? emoji.success : emoji.error} ${status.enabled ? 'Enabled' : 'Disabled'}\nInterval: ${status.interval || 60} minutes`
+            ) || new (require('discord.js').EmbedBuilder)()
+                .setTitle('Auto-Sync Status')
+                .setDescription(`${status.enabled ? 'Enabled' : 'Disabled'}`);
             
-            if (client.webhookLogger && client.webhookLogger.enabled) {
-                await client.webhookLogger.sendInfo('Auto-Sync Status Checked', 'User checked auto-refresh status', {
-                    info: `Total syncs: ${status.totalRefreshes}`
-                });
-            }
-            
-            await interaction.reply({ embeds: [embed], flags: 64 });
+            await interaction.reply({ embeds: [embed] }).catch(() => {
+                interaction.reply({ content: `${emoji.success} Auto-sync is ${status.enabled ? 'enabled' : 'disabled'}`, flags: 64 });
+            });
         } catch (error) {
-            console.error('Error in autosync command:', error);
+            console.error(`[autosync.js]`, error.message);
             
-            if (client.webhookLogger && client.webhookLogger.enabled) {
+            if (client?.webhookLogger?.enabled) {
                 await client.webhookLogger.sendError('Auto-Sync Command Error', error.message, {
                     commandName: 'autosync',
                     userId: interaction.user.id,
                     guildId: interaction.guildId,
                     stack: error.stack
-                });
+                }).catch(() => {});
             }
             
             await interaction.reply({

@@ -1,5 +1,4 @@
 const { EmbedBuilder } = require('discord.js');
-const { users } = require('../utils/database');
 const emoji = require('../utils/emoji');
 const fs = require('fs');
 const path = require('path');
@@ -22,24 +21,22 @@ module.exports = {
         try {
             if (member.user.bot) return;
 
-            users.get(member.guild.id, member.id);
-
             const config = loadWelcomeConfig();
             const guildConfig = config[member.guild.id];
 
-            if (guildConfig && guildConfig.welcome && guildConfig.welcome.enabled && guildConfig.welcome.channelId) {
-                const channel = member.guild.channels.cache.get(guildConfig.welcome.channelId);
+            if (guildConfig && guildConfig.leave && guildConfig.leave.enabled && guildConfig.leave.channelId) {
+                const channel = member.guild.channels.cache.get(guildConfig.leave.channelId);
                 
                 if (channel) {
-                    const message = (guildConfig.welcome.message || 'Welcome {user} to **{server}**!')
+                    const message = (guildConfig.leave.message || 'Goodbye {user}! We now have {membercount} members.')
                         .replace('{user}', member.user.username)
                         .replace('{server}', member.guild.name)
                         .replace('{membercount}', member.guild.memberCount.toString());
 
                     const embed = new EmbedBuilder()
-                        .setTitle(`${emoji.party} Welcome!`)
+                        .setTitle(`${emoji.warning} Goodbye!`)
                         .setDescription(message)
-                        .setColor(0x00FF00)
+                        .setColor(0xFF6B6B)
                         .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
                         .addFields(
                             { name: 'Member', value: `${member.user.tag}`, inline: true },
@@ -49,26 +46,12 @@ module.exports = {
                         .setTimestamp();
 
                     await channel.send({ embeds: [embed] }).catch(console.error);
-                    console.log(`${emoji.success} Welcome message sent for ${member.user.tag}`);
+                    console.log(`${emoji.warning} Leave message sent for ${member.user.tag}`);
                 }
             }
 
-            const dmEmbed = new EmbedBuilder()
-                .setTitle(`${emoji.party} Welcome to ${member.guild.name}!`)
-                .setDescription(`Hey **${member.user.username}**, glad you joined us!`)
-                .setColor(0x5865F2)
-                .addFields(
-                    { name: `${emoji.book} Getting Started`, value: 'Type `/help` to see all commands!' },
-                    { name: `${emoji.star} Features`, value: 'Leveling, Economy, Games, Mail & More!' }
-                )
-                .setThumbnail(member.guild.iconURL({ size: 256 }))
-                .setFooter({ text: 'Have fun!' })
-                .setTimestamp();
-
-            await member.send({ embeds: [dmEmbed] }).catch(() => {});
-
         } catch (error) {
-            console.error('Guild Member Add event error:', error);
+            console.error('Guild Member Remove event error:', error);
         }
     }
 };

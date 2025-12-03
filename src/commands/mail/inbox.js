@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/helpers');
 const { mail } = require('../../utils/database');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,53 +11,69 @@ module.exports = {
     
     async execute(interaction, client) {
         try {
-            if (!interaction.guild) {
-                return interaction.reply({ content: `${emoji.error} This command can only be used in a server.`, flags: 64 }).catch(() => {});
+            if (!interaction.guild || !interaction.user) {
+                return interaction.reply({ content: `${emoji.error || '❌'} This command can only be used in a server.`, flags: 64 }).catch(() => {});
             }
 
-            if (!interaction.user || !interaction.guild) {
-                return interaction.reply({ content: 'Invalid interaction context.', flags: 64 });
-            }
-
-            const inbox = mail.getInbox(interaction.guild.id, interaction.user.id);
+            const inbox = mail?.getInbox?.(interaction.guild.id, interaction.user.id) || [];
             
-            if (inbox.length === 0) {
-                return interaction.reply({ embeds: [createEmbed({
+            if (!inbox || inbox.length === 0) {
+                const emptyEmbed = createEmbed({
                     title: 'Your Inbox',
                     description: 'Your inbox is empty.',
                     color: 0x808080
-                })], flags: 64 });
+                }) || new (require('discord.js').EmbedBuilder)().setTitle('Inbox').setDescription('Empty');
+                
+                return interaction.reply({ embeds: [emptyEmbed], flags: 64 }).catch(() => {
+                    interaction.reply({ content: `${emoji.mail || '📬'} Your inbox is empty.`, flags: 64 });
+                });
             }
             
-            const mailList = await Promise.all(inbox.slice(-10).reverse().map(async (m, index) => {
-                let senderName = 'Unknown';
-                try {
-                    if (m.from) {
-                        const sender = await client.users.fetch(m.from).catch(() => null);
-                        if (sender) senderName = sender.username;
+            const mailList = await Promise.all(
+                inbox.slice(-10).reverse().map(async (m, index) => {
+                    try {
+                        let senderName = 'Unknown';
+                        if (m?.from && client?.users) {
+                            try {
+                                const sender = await client.users.fetch(m.from).catch(() => null);
+                                if (sender?.username) senderName = sender.username;
+                            } catch (e) {}
+                        }
+                        
+                        const date = m?.timestamp ? new Date(m.timestamp).toLocaleDateString() : 'Unknown date';
+                        const readStatus = m?.read ? '' : `${emoji.mail || '📬'} `;
+                        const subject = m?.subject || 'No subject';
+                        
+                        return `**${index + 1}.** ${readStatus}${subject}\n   From: ${senderName} | ${date}`;
+                    } catch (e) {
+                        return `**${index + 1}.** Message (error reading)`;
                     }
-                } catch (e) {}
-                
-                const date = new Date(m.timestamp).toLocaleDateString();
-                const readStatus = m.read ? '' : `${emoji.mail} `;
-                
-                return `**${index + 1}.** ${readStatus}${m.subject}\n   From: ${senderName} | ${date}`;
-            }));
+                })
+            );
             
-            const unreadCount = inbox.filter(m => !m.read).length;
+            const unreadCount = inbox.filter(m => !m?.read).length || 0;
             
-            const embed = createEmbed({
+            const inboxEmbed = createEmbed({
                 title: 'Your Inbox',
-                description: mailList.join('\n\n'),
+                description: mailList.join('\n\n') || 'No messages to display',
                 color: 0x0099ff,
-                footer: `${inbox.length} message(s) | ${unreadCount} unread | Use /read <number> to read`
-            });
+                footer: `${inbox.length || 0} message(s) | ${unreadCount} unread | Use /read <number> to read`
+            }) || new (require('discord.js').EmbedBuilder)()
+                .setTitle('Your Inbox')
+                .setDescription(`${inbox.length} messages`)
+                .setColor(0x0099ff);
             
-            await interaction.reply({ embeds: [embed], flags: 64 });
+            await interaction.reply({ embeds: [inboxEmbed], flags: 64 }).catch(() => {
+                interaction.reply({ content: `${emoji.mail || '📬'} You have ${inbox.length} messages in your inbox`, flags: 64 });
+            });
         } catch (error) {
-            console.error('Inbox command error:', error);
+            console.error('[inbox.js]', error.message);
+            const errorEmbed = AdvancedEmbed.commandError?.('Inbox Error', error.message || 'Error loading inbox') || new (require('discord.js').EmbedBuilder)().setTitle('Error').setDescription('Failed to load inbox');
+            
             if (!interaction.replied) {
-                await interaction.reply({ content: 'Error loading inbox.', flags: 64 }).catch(() => {});
+                await interaction.reply({ embeds: [errorEmbed], flags: 64 }).catch(() => {
+                    interaction.reply({ content: '❌ Error loading inbox.', flags: 64 });
+                });
             }
         }
     }

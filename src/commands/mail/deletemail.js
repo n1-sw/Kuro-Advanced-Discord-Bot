@@ -43,7 +43,7 @@ module.exports = {
                 flags: 64
             });
         } catch (error) {
-            console.error('Delete mail command error:', error);
+            console.error(`[Command Error] deletemail.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error deleting mail.', flags: 64 }).catch(() => {});
             }

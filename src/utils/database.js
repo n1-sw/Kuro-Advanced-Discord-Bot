@@ -33,6 +33,7 @@ const saveData = (filename, data) => {
     }
 };
 
+// ===== USER PROFILES & LEVELS =====
 const users = {
     data: loadData('users.json'),
     
@@ -49,7 +50,11 @@ const users = {
                 lastXpTime: 0,
                 lastDaily: 0,
                 inventory: [],
-                totalMessages: 0
+                totalMessages: 0,
+                createdAt: Date.now(),
+                nickname: null,
+                bio: null,
+                favoriteGame: null
             };
         }
         return this.data[key];
@@ -68,11 +73,21 @@ const users = {
             return guildUsers.sort((a, b) => b.level - a.level || b.xp - a.xp).slice(0, limit);
         } else if (type === 'coins') {
             return guildUsers.sort((a, b) => b.coins - a.coins).slice(0, limit);
+        } else if (type === 'messages') {
+            return guildUsers.sort((a, b) => b.totalMessages - a.totalMessages).slice(0, limit);
         }
         return guildUsers.slice(0, limit);
+    },
+    
+    updateProfile(guildId, userId, updates) {
+        const user = this.get(guildId, userId);
+        Object.assign(user, updates);
+        this.save();
+        return user;
     }
 };
 
+// ===== MAIL SYSTEM =====
 const mail = {
     data: loadData('mail.json'),
     
@@ -137,6 +152,7 @@ const mail = {
     }
 };
 
+// ===== MODERATION LOGS =====
 const modLogs = {
     data: loadData('modlogs.json'),
     
@@ -175,6 +191,137 @@ const modLogs = {
     }
 };
 
+// ===== GUILD SETTINGS & PREFERENCES =====
+const guildSettings = {
+    data: loadData('guild-settings.json'),
+    
+    get(guildId) {
+        if (!this.data[guildId]) {
+            this.data[guildId] = {
+                guildId: guildId,
+                prefix: '!',
+                welcomeChannel: null,
+                logsChannel: null,
+                automodEnabled: true,
+                levelingEnabled: true,
+                economyEnabled: true,
+                customPrefix: false,
+                joinRoles: [],
+                mutedRole: null,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+        }
+        return this.data[guildId];
+    },
+    
+    update(guildId, updates) {
+        const settings = this.get(guildId);
+        Object.assign(settings, updates, { updatedAt: Date.now() });
+        this.save();
+        return settings;
+    },
+    
+    save() {
+        saveData('guild-settings.json', this.data);
+    }
+};
+
+// ===== ECONOMY & TRANSACTIONS =====
+const transactions = {
+    data: loadData('transactions.json'),
+    
+    add(guildId, fromUserId, toUserId, amount, type, reason = '') {
+        const key = guildId;
+        if (!this.data[key]) {
+            this.data[key] = [];
+        }
+        
+        const transaction = {
+            id: Date.now().toString(36),
+            from: fromUserId,
+            to: toUserId,
+            amount,
+            type, // 'transfer', 'shop', 'gamble', 'daily', 'level-up'
+            reason,
+            timestamp: Date.now()
+        };
+        
+        this.data[key].push(transaction);
+        if (this.data[key].length > 10000) {
+            this.data[key] = this.data[key].slice(-10000);
+        }
+        this.save();
+        return transaction;
+    },
+    
+    getHistory(guildId, userId, limit = 20) {
+        const transactions = this.data[guildId] || [];
+        return transactions
+            .filter(t => t.from === userId || t.to === userId)
+            .slice(-limit)
+            .reverse();
+    },
+    
+    save() {
+        saveData('transactions.json', this.data);
+    }
+};
+
+// ===== GAME STATISTICS =====
+const gameStats = {
+    data: loadData('game-stats.json'),
+    
+    get(guildId, userId, game) {
+        const key = `${guildId}_${userId}`;
+        if (!this.data[key]) {
+            this.data[key] = {};
+        }
+        if (!this.data[key][game]) {
+            this.data[key][game] = {
+                played: 0,
+                won: 0,
+                lost: 0,
+                totalScore: 0,
+                bestScore: 0,
+                lastPlayed: null,
+                createdAt: Date.now()
+            };
+        }
+        return this.data[key][game];
+    },
+    
+    recordGame(guildId, userId, game, won, score = 0) {
+        const stats = this.get(guildId, userId, game);
+        stats.played++;
+        if (won) stats.won++;
+        else stats.lost++;
+        stats.totalScore += score;
+        stats.bestScore = Math.max(stats.bestScore, score);
+        stats.lastPlayed = Date.now();
+        this.save();
+        return stats;
+    },
+    
+    getLeaderboard(guildId, game, limit = 10) {
+        const leaderboard = [];
+        for (const [key, games] of Object.entries(this.data)) {
+            if (key.startsWith(guildId) && games[game]) {
+                leaderboard.push({
+                    userId: key.split('_')[1],
+                    ...games[game]
+                });
+            }
+        }
+        return leaderboard.sort((a, b) => b.bestScore - a.bestScore).slice(0, limit);
+    },
+    
+    save() {
+        saveData('game-stats.json', this.data);
+    }
+};
+
+// ===== ANTI-NUKE TRACKING =====
 const antiNukeTracking = {
     data: {},
     
@@ -203,6 +350,7 @@ const antiNukeTracking = {
     }
 };
 
+// ===== SPAM TRACKING =====
 const spamTracking = {
     data: {},
     
@@ -227,10 +375,82 @@ const spamTracking = {
     }
 };
 
+// ===== USER PREFERENCES & CUSTOMIZATION =====
+const userPreferences = {
+    data: loadData('user-preferences.json'),
+    
+    get(guildId, userId) {
+        const key = `${guildId}_${userId}`;
+        if (!this.data[key]) {
+            this.data[key] = {
+                userId: userId,
+                guildId: guildId,
+                dmNotifications: true,
+                dailyReminder: false,
+                profilePrivate: false,
+                theme: 'default',
+                language: 'en',
+                createdAt: Date.now()
+            };
+        }
+        return this.data[key];
+    },
+    
+    update(guildId, userId, updates) {
+        const prefs = this.get(guildId, userId);
+        Object.assign(prefs, updates);
+        this.save();
+        return prefs;
+    },
+    
+    save() {
+        saveData('user-preferences.json', this.data);
+    }
+};
+
+// ===== SYSTEM CACHE & MEMORY =====
+const cache = {
+    data: {},
+    ttl: {},
+    
+    set(key, value, ttlMs = 3600000) {
+        this.data[key] = value;
+        this.ttl[key] = Date.now() + ttlMs;
+    },
+    
+    get(key) {
+        if (this.ttl[key] && Date.now() > this.ttl[key]) {
+            delete this.data[key];
+            delete this.ttl[key];
+            return null;
+        }
+        return this.data[key] || null;
+    },
+    
+    has(key) {
+        return this.get(key) !== null;
+    },
+    
+    delete(key) {
+        delete this.data[key];
+        delete this.ttl[key];
+    },
+    
+    clear() {
+        this.data = {};
+        this.ttl = {};
+    }
+};
+
 module.exports = {
     users,
     mail,
     modLogs,
+    guildSettings,
+    transactions,
+    gameStats,
     antiNukeTracking,
-    spamTracking
+    spamTracking,
+    userPreferences,
+    cache
 };

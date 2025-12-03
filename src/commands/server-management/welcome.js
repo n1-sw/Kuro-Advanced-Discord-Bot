@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { createEmbed, successEmbed, errorEmbed } = require('../../utils/helpers');
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 const fs = require('fs');
 const path = require('path');
 
@@ -15,8 +15,7 @@ const loadWelcomeConfig = () => {
             return JSON.parse(fs.readFileSync(configFile, 'utf8'));
         }
     } catch (error) {
-        console.error('Error loading welcome config:', error);
-    }
+            console.error(`[Command Error] welcome.js:`, error.message);}
     return {};
 };
 
@@ -25,45 +24,63 @@ const saveWelcomeConfig = (config) => {
         fs.mkdirSync(path.dirname(configFile), { recursive: true });
         fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
     } catch (error) {
-        console.error('Error saving welcome config:', error);
-    }
+            console.error(`[Command Error] welcome.js:`, error.message);}
 };
+
+const defaultWelcomeMessage = 'Welcome {user} to **{server}**! We now have {membercount} members!';
+const defaultLeaveMessage = 'Goodbye {user}! We now have {membercount} members remaining.';
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('welcome')
-        .setDescription('Manage welcome/leave messages (guild-only)')
+        .setDescription('Manage welcome and leave messages')
         .addSubcommand(sub =>
             sub.setName('set')
-                .setDescription('Set welcome/leave messages')
+                .setDescription('Set custom welcome or leave message')
                 .addStringOption(opt =>
                     opt.setName('type')
                         .setDescription('Message type')
                         .setRequired(true)
                         .addChoices(
-                            { name: 'Welcome', value: 'welcome' },
-                            { name: 'Leave', value: 'leave' }
+                            { name: 'Welcome Message', value: 'welcome' },
+                            { name: 'Leave Message', value: 'leave' }
                         ))
                 .addStringOption(opt =>
                     opt.setName('message')
-                        .setDescription('Message text (use {user} and {server} for placeholders)')
+                        .setDescription('Custom message (use {user}, {server}, {membercount})')
                         .setRequired(true)
-                        .setMaxLength(200)))
+                        .setMaxLength(500)))
         .addSubcommand(sub =>
-            sub.setName('toggle')
-                .setDescription('Enable/disable auto messages')
+            sub.setName('channel')
+                .setDescription('Set welcome or leave channel')
                 .addStringOption(opt =>
                     opt.setName('type')
-                        .setDescription('Message type')
+                        .setDescription('Channel type')
                         .setRequired(true)
                         .addChoices(
-                            { name: 'Welcome', value: 'welcome' },
-                            { name: 'Leave', value: 'leave' }
+                            { name: 'Welcome Channel', value: 'welcome' },
+                            { name: 'Leave Channel', value: 'leave' }
+                        ))
+                .addChannelOption(opt =>
+                    opt.setName('channel')
+                        .setDescription('Channel to send messages')
+                        .setRequired(true)
+                        .addChannelTypes(ChannelType.GuildText)))
+        .addSubcommand(sub =>
+            sub.setName('toggle')
+                .setDescription('Enable or disable welcome/leave messages')
+                .addStringOption(opt =>
+                    opt.setName('type')
+                        .setDescription('Feature to toggle')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Welcome Messages', value: 'welcome' },
+                            { name: 'Leave Messages', value: 'leave' }
                         )))
         .addSubcommand(sub =>
             sub.setName('view')
-                .setDescription('View current welcome/leave settings'))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+                .setDescription('View current welcome and leave settings'))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
     
     async execute(interaction) {
         try {
@@ -72,48 +89,73 @@ module.exports = {
             const subcommand = interaction.options.getSubcommand();
             
             if (!config[guildId]) {
-                config[guildId] = { welcome: { enabled: false, message: '' }, leave: { enabled: false, message: '' } };
+                config[guildId] = {
+                    welcome: { enabled: false, message: defaultWelcomeMessage, channelId: null },
+                    leave: { enabled: false, message: defaultLeaveMessage, channelId: null }
+                };
             }
-            
+
             if (subcommand === 'set') {
                 const type = interaction.options.getString('type');
                 const message = interaction.options.getString('message');
                 
-                config[guildId][type] = { enabled: true, message };
+                config[guildId][type] = config[guildId][type] || { enabled: false, channelId: null };
+                config[guildId][type].message = message;
                 saveWelcomeConfig(config);
                 
-                await interaction.reply({
-                    embeds: [successEmbed(`${type.charAt(0).toUpperCase() + type.slice(1)} message set!\n\n**Preview:**\n${message.replace('{user}', interaction.user.username).replace('{server}', interaction.guild.name)}`)],
-                    flags: 64
-                });
-            } else if (subcommand === 'toggle') {
+                const embed = AdvancedEmbed.commandSuccess(`${type === 'welcome' ? 'Welcome' : 'Leave'} Message Updated`, message);
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subcommand === 'channel') {
                 const type = interaction.options.getString('type');
+                const channel = interaction.options.getChannel('channel');
+                
+                config[guildId][type] = config[guildId][type] || { enabled: false, message: type === 'welcome' ? defaultWelcomeMessage : defaultLeaveMessage };
+                config[guildId][type].channelId = channel.id;
+                saveWelcomeConfig(config);
+                
+                const embed = AdvancedEmbed.commandSuccess(`Channel Updated`, `${type === 'welcome' ? 'Welcome' : 'Leave'} channel set to ${channel}`);
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subcommand === 'toggle') {
+                const type = interaction.options.getString('type');
+                
+                if (!config[guildId][type]) {
+                    config[guildId][type] = { enabled: false, message: type === 'welcome' ? defaultWelcomeMessage : defaultLeaveMessage, channelId: null };
+                }
+                
                 config[guildId][type].enabled = !config[guildId][type].enabled;
                 saveWelcomeConfig(config);
                 
-                const status = config[guildId][type].enabled ? 'enabled' : 'disabled';
-                await interaction.reply({
-                    embeds: [successEmbed(`${type.charAt(0).toUpperCase() + type.slice(1)} messages **${status}**!`)],
-                    flags: 64
-                });
-            } else if (subcommand === 'view') {
-                const embed = createEmbed({
-                    title: 'Welcome/Leave Settings',
-                    fields: [
-                        { name: 'Welcome', value: config[guildId].welcome.enabled ? `${emoji.success} ${config[guildId].welcome.message}` : `${emoji.error} Disabled`, inline: false },
-                        { name: 'Leave', value: config[guildId].leave.enabled ? `${emoji.success} ${config[guildId].leave.message}` : `${emoji.error} Disabled`, inline: false }
-                    ],
-                    color: 0x0099ff
-                });
+                const embed = AdvancedEmbed.commandSuccess(
+                    `${type === 'welcome' ? 'Welcome' : 'Leave'} Messages`,
+                    config[guildId][type].enabled ? '✅ Enabled' : '❌ Disabled'
+                );
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subcommand === 'view') {
+                const welcome = config[guildId].welcome || { enabled: false, channelId: null, message: defaultWelcomeMessage };
+                const leave = config[guildId].leave || { enabled: false, channelId: null, message: defaultLeaveMessage };
                 
-                await interaction.reply({ embeds: [embed], flags: 64 });
+                const embed = AdvancedEmbed.info('Welcome System Settings', 'Current configuration', [
+                    { name: 'Welcome Status', value: welcome.enabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                    { name: 'Welcome Channel', value: welcome.channelId ? `<#${welcome.channelId}>` : 'Not set', inline: true },
+                    { name: 'Leave Status', value: leave.enabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                    { name: 'Leave Channel', value: leave.channelId ? `<#${leave.channelId}>` : 'Not set', inline: true },
+                    { name: 'Welcome Message', value: `\`${welcome.message}\``, inline: false },
+                    { name: 'Leave Message', value: `\`${leave.message}\``, inline: false }
+                ]);
+                return interaction.reply({ embeds: [embed] });
             }
         } catch (error) {
-            console.error('Error in welcome command:', error);
-            await interaction.reply({
-                embeds: [errorEmbed('Error managing welcome settings.')],
-                flags: 64
-            }).catch(() => {});
+            console.error(`[Command Error] welcome.js:`, error.message);
+            const embed = AdvancedEmbed.commandError('Welcome System Error', 'Could not process command');
+            if (!interaction.replied) {
+                await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+            }
         }
     }
 };

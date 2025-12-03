@@ -26,6 +26,17 @@ module.exports = {
         spamInterval: 5000,
         maxMentions: 5,
         maxEmojis: 10,
+        warnThreshold: 3,
+        muteThreshold: 5,
+        
+        // Detection Features
+        spamDetection: { enabled: true },
+        badWordDetection: { enabled: true },
+        capsDetection: { enabled: true, threshold: 70 },
+        repeatDetection: { enabled: true },
+        linkDetection: { enabled: true },
+        emojiDetection: { enabled: true },
+        
         badWords: [
             // ===== COMMON PROFANITY =====
             'damn', 'crap', 'hell', 'piss', 'bastard', 'ass', 'asshole',

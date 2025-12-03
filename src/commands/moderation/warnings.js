@@ -22,7 +22,7 @@ module.exports = {
                 })], flags: 64 });
             }
             
-            const userData = users.get(interaction.guild.id, target.id);
+            const data = users.get(interaction.guild.id, target.id);
             const warnings = userData.warnings || [];
             
             if (warnings.length === 0) {
@@ -48,7 +48,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in warnings command:', error);
+            console.error(`[Command Error] warnings.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error retrieving warnings.')],
                 flags: 64

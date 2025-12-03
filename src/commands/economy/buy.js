@@ -23,7 +23,7 @@ module.exports = {
             }
             
             const item = items[itemIndex];
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.coins < item.price) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. You need ${formatNumber(item.price)} coins.`)], flags: 64 });
@@ -45,7 +45,7 @@ module.exports = {
                 )] 
             });
         } catch (error) {
-            console.error('Buy command error:', error);
+            console.error(`[Command Error] buy.js:`, error.message);
             if (!interaction.replied) {
                 await interaction.reply({ content: 'Error purchasing item.', flags: 64 }).catch(() => {});
             }

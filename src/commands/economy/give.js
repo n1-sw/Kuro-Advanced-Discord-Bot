@@ -33,13 +33,13 @@ module.exports = {
                 return interaction.reply({ embeds: [errorEmbed('You cannot give coins to bots.')], flags: 64 });
             }
             
-            const senderData = users.get(interaction.guild.id, interaction.user.id);
+            const senderData = users.get(interaction.guild.id, interaction.user.id) || { coins: 0 };
             
             if (senderData.coins < amount) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(senderData.coins)}`)], flags: 64 });
             }
             
-            const receiverData = users.get(interaction.guild.id, target.id);
+            const receiverData = users.get(interaction.guild.id, target.id) || { coins: 0 };
             
             senderData.coins -= amount;
             receiverData.coins += amount;
@@ -52,7 +52,7 @@ module.exports = {
                 )] 
             });
         } catch (error) {
-            console.error('Error in give command:', error);
+            console.error(`[give.js]`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error giving coins.')],
                 flags: 64

@@ -5,10 +5,11 @@ const { loadCommands, reloadCommands, handleInteraction } = require('./utils/com
 const { startRPCRotation } = require('./utils/rpc');
 const { autoDeployCommands, startAutoRefreshSchedule } = require('./utils/autoDeploy');
 const WebhookLogger = require('./utils/webhookLogger');
+const StatusWebhook = require('./utils/statusWebhook');
+const BotStatusTracker = require('./utils/botStatusTracker');
 const { logCredentialStatus } = require('./utils/clientSecret');
 const config = require('./config');
 
-// Validate all Discord credentials before starting
 console.log(`\n${emoji.lock} VALIDATING DISCORD CREDENTIALS...`);
 const credentialCheck = logCredentialStatus();
 
@@ -17,7 +18,6 @@ if (!credentialCheck.valid) {
     process.exit(1);
 }
 
-// Initialize webhook logger
 const webhookLogger = new WebhookLogger(process.env.ERROR_WEBHOOK_URL);
 
 const client = new Client({
@@ -37,13 +37,14 @@ loadCommands(client);
 
 client.reloadCommands = () => reloadCommands(client);
 client.webhookLogger = webhookLogger;
+client.statusTracker = new BotStatusTracker(client, webhookLogger);
 
-// Store auto-deploy state on client
 client.autoDeployEnabled = config.autoDeploy?.enabled ?? true;
 client.autoRefreshIntervalId = null;
 
 const messageCreate = require('./events/messageCreate');
 const guildMemberAdd = require('./events/guildMemberAdd');
+const guildMemberRemove = require('./events/guildMemberRemove');
 const guildCreate = require('./events/guildCreate');
 const guildBanAdd = require('./events/guildBanAdd');
 const channelDelete = require('./events/channelDelete');
@@ -51,16 +52,10 @@ const roleDelete = require('./events/roleDelete');
 const autoModerationActionExecution = require('./events/autoModerationActionExecution');
 
 client.on('ready', async () => {
-    console.log(`Bot is online as ${client.user.tag}`);
-    console.log(`Serving ${client.guilds.cache.size} servers`);
+    client.statusTracker.recordBotOnline();
+    console.log(`${emoji.success} Bot is online as ${client.user.tag}`);
+    console.log(`${emoji.server} Serving ${client.guilds.cache.size} servers`);
     
-    if (webhookLogger.enabled) {
-        await webhookLogger.sendInfo('Bot Started', `Bot is now online as ${client.user.tag}`, {
-            info: `Serving ${client.guilds.cache.size} servers`
-        });
-    }
-    
-    // Auto-deploy commands on startup
     if (client.autoDeployEnabled) {
         const token = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
         const clientId = process.env.CLIENT_ID;
@@ -68,51 +63,57 @@ client.on('ready', async () => {
         if (token && clientId) {
             await autoDeployCommands(token, clientId, { silent: false, webhookLogger });
             
-            // Start auto-refresh schedule (hourly)
             const refreshInterval = config.autoDeploy?.refreshIntervalMs || 3600000;
             client.autoRefreshIntervalId = await startAutoRefreshSchedule(client, token, clientId, refreshInterval);
             console.log(`${emoji.success} Auto-refresh schedule started successfully`);
         }
     }
     
+    if (process.env.STATUS_WEBHOOK_URL) {
+        const statusWebhook = new StatusWebhook(process.env.STATUS_WEBHOOK_URL, client);
+        statusWebhook.start(30000);
+        client.statusWebhook = statusWebhook;
+    }
+    
     startRPCRotation(client);
 });
 
 client.on('interactionCreate', async (interaction) => {
-    await handleInteraction(interaction, client);
+    if (interaction.isCommand()) {
+        const commandName = interaction.commandName;
+        const startTime = Date.now();
+        try {
+            await handleInteraction(interaction, client);
+            const executionTime = Date.now() - startTime;
+            client.statusTracker.recordCommandExecution(commandName, true);
+            client.webhookLogger.recordCommand(commandName, true, executionTime, interaction.user.id, interaction.guild?.id);
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+            client.statusTracker.recordCommandExecution(commandName, false);
+            client.webhookLogger.recordCommand(commandName, false, executionTime, interaction.user.id, interaction.guild?.id);
+            throw error;
+        }
+    } else {
+        client.webhookLogger.recordInteraction(interaction.type, interaction.user.id, interaction.guild?.id, { customId: interaction.customId });
+        await handleInteraction(interaction, client);
+    }
 });
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    
+    client.webhookLogger.recordMessage(message.author.id, message.content, message.guild?.id);
     await messageCreate.execute(message, client);
 });
 
 client.on('guildMemberAdd', (member) => {
+    client.webhookLogger.recordEvent('MEMBER_JOIN', { userId: member.id, guildId: member.guild.id, memberCount: member.guild.memberCount });
     guildMemberAdd.execute(member, client);
 });
 
-client.on('guildCreate', (guild) => {
-    guildCreate.execute(guild, client);
-});
-
-client.on('guildBanAdd', (ban) => {
-    guildBanAdd.execute(ban, client);
-});
-
-client.on('channelDelete', (channel) => {
-    channelDelete.execute(channel, client);
-});
-
-client.on('roleDelete', (role) => {
-    roleDelete.execute(role, client);
-});
-
-client.on('autoModerationActionExecution', (action) => {
-    autoModerationActionExecution.execute(action, client);
-});
-
 client.on('guildMemberRemove', async (member) => {
+    client.webhookLogger.recordEvent('MEMBER_LEAVE', { userId: member.id, guildId: member.guild.id });
+    guildMemberRemove.execute(member, client);
+    
     const { antiNukeTracking } = require('./utils/database');
     
     if (!config.antinuke.enabled) return;
@@ -140,7 +141,7 @@ client.on('guildMemberRemove', async (member) => {
             
             if (executorMember && executorMember.bannable) {
                 await executorMember.ban({ reason: 'Anti-nuke: Mass kick detected' });
-                console.log(`✅ Anti-nuke: Banned ${executor.tag} for mass kicking`);
+                console.log(`${emoji.success} Anti-nuke: Banned ${executor.tag} for mass kicking`);
             }
         }
     } catch (error) {
@@ -150,47 +151,72 @@ client.on('guildMemberRemove', async (member) => {
     }
 });
 
+client.on('guildCreate', (guild) => {
+    guildCreate.execute(guild, client);
+});
+
+client.on('guildBanAdd', (ban) => {
+    guildBanAdd.execute(ban, client);
+});
+
+client.on('channelDelete', (channel) => {
+    channelDelete.execute(channel, client);
+});
+
+client.on('roleDelete', (role) => {
+    roleDelete.execute(role, client);
+});
+
+client.on('autoModerationActionExecution', (action) => {
+    autoModerationActionExecution.execute(action, client);
+});
+
 const token = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 
-// Additional validation with detailed error messages
 if (!token || !clientId) {
-    console.error('\n❌ ERROR: CRITICAL DISCORD CREDENTIALS MISSING!\n');
+    console.error(`\n${emoji.error} ERROR: CRITICAL DISCORD CREDENTIALS MISSING!\n`);
     if (!token) {
-        console.error('  ❌ DISCORD_BOT_TOKEN is not set');
-        console.error('     Set in Wispbyte Environment Variables as: DISCORD_BOT_TOKEN');
+        console.error(`  ${emoji.error} DISCORD_BOT_TOKEN is not set`);
     }
     if (!clientId) {
-        console.error('  ❌ CLIENT_ID is not set');
-        console.error('     Set in Wispbyte Environment Variables as: CLIENT_ID');
+        console.error(`  ${emoji.error} CLIENT_ID is not set`);
     }
     console.error('\n📌 Get credentials from: https://discord.com/developers/applications\n');
     process.exit(1);
 }
 
-// Optional: Log if CLIENT_SECRET is missing
 if (!clientSecret) {
-    console.warn('\n⚠️  WARNING: CLIENT_SECRET not configured (optional but recommended)');
-    console.warn('   For production, set CLIENT_SECRET in Wispbyte Environment Variables\n');
+    console.warn(`\n${emoji.warning} WARNING: CLIENT_SECRET not configured (optional but recommended)\n`);
 }
 
-// Global error handler for uncaught exceptions
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
+    if (client.statusTracker) client.statusTracker.recordError('Uncaught Exception', error.message);
     webhookLogger.sendError('Uncaught Exception', error.message, {
         errorCode: error.code || 'UNCAUGHT',
         stack: error.stack
     });
 });
 
-// Global error handler for unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection:', reason);
+    if (client.statusTracker) client.statusTracker.recordError('Unhandled Rejection', String(reason));
     webhookLogger.sendError('Unhandled Rejection', String(reason), {
         errorCode: 'UNHANDLED_REJECTION',
         stack: reason?.stack || 'No stack trace available'
     });
+});
+
+client.on('disconnect', () => {
+    console.log(`${emoji.offline} Bot disconnected from Discord`);
+    if (client.statusTracker) client.statusTracker.recordBotOffline();
+});
+
+client.on('error', (error) => {
+    console.error(`${emoji.error} Client error:`, error);
+    if (client.statusTracker) client.statusTracker.recordError('Client Error', error.message);
 });
 
 client.login(token).catch(error => {

@@ -7,6 +7,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { createEmbed, successEmbed, errorEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 const AutoModManager = require('../../utils/automod');
 
 module.exports = {
@@ -97,7 +98,7 @@ module.exports = {
                     });
             }
         } catch (error) {
-            console.error(`${emoji.error} AutoMod command error:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
             if (!interaction.replied && !interaction.deferred) {
                 try {
                     await interaction.reply({
@@ -105,7 +106,6 @@ module.exports = {
                         ephemeral: true
                     });
                 } catch (e) {
-                    console.error('Failed to send error reply:', e);
                 }
             } else if (interaction.deferred) {
                 try {
@@ -113,7 +113,6 @@ module.exports = {
                         embeds: [errorEmbed(`${emoji.error} An error occurred while processing your request.`)]
                     });
                 } catch (e) {
-                    console.error('Failed to edit error reply:', e);
                 }
             }
         }
@@ -147,7 +146,7 @@ async function handleListRules(interaction, autoModManager) {
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error(`${emoji.error} Error listing rules:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
         await interaction.editReply({
             embeds: [errorEmbed(`${emoji.error} Failed to list AutoMod rules. Please try again later.`)]
         });
@@ -224,7 +223,7 @@ async function handleAddBadwords(interaction, autoModManager) {
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error(`${emoji.error} Error adding badwords rule:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
         await interaction.editReply({
             embeds: [errorEmbed(`${emoji.error} Failed to create keyword filter rule. Please try again.`)]
         });
@@ -274,7 +273,7 @@ async function handleAddSpam(interaction, autoModManager) {
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error(`${emoji.error} Error adding spam rule:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
         await interaction.editReply({
             embeds: [errorEmbed(`${emoji.error} Failed to create spam detection rule. Please try again.`)]
         });
@@ -303,7 +302,7 @@ async function handleDeleteRule(interaction, autoModManager) {
             embeds: [successEmbed(`${emoji.success} AutoMod rule deleted successfully.`)]
         });
     } catch (error) {
-        console.error(`${emoji.error} Error deleting rule:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
         await interaction.editReply({
             embeds: [errorEmbed(`${emoji.error} Failed to delete AutoMod rule. Please try again.`)]
         });
@@ -334,7 +333,7 @@ async function handleToggleRule(interaction, autoModManager) {
             embeds: [successEmbed(`${emoji.success} AutoMod Rule ${status}\n\n**Rule:** ${rule.name}`)]
         });
     } catch (error) {
-        console.error(`${emoji.error} Error toggling rule:`, error);
+            console.error(`[Command Error] automod.js:`, error.message);
         await interaction.editReply({
             embeds: [errorEmbed(`${emoji.error} Failed to toggle AutoMod rule. Please try again.`)]
         });

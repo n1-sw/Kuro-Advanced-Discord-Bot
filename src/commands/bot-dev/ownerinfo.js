@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,7 +31,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Owner info error:', error);
+            console.error(`[Command Error] ownerinfo.js:`, error.message);
             await interaction.reply({ content: 'Could not fetch owner information.', flags: 64 });
         }
     }

@@ -55,7 +55,7 @@ module.exports = {
                 embeds: [successEmbed(`**${target.user.tag}** has been muted for ${formatDuration(duration)}.\nReason: ${reason}`)] 
             });
         } catch (error) {
-            console.error('Mute error:', error);
+            console.error(`[Command Error] mute.js:`, error.message);
             await interaction.reply({ embeds: [errorEmbed('Failed to mute the user.')], flags: 64 });
         }
     }

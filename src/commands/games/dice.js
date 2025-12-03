@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { successEmbed, errorEmbed, formatNumber, randomInt } = require('../../utils/helpers');
 const { users } = require('../../utils/database');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 const config = require('../../config');
 
 module.exports = {
@@ -19,7 +20,7 @@ module.exports = {
         try {
             const amount = interaction.options.getInteger('amount');
             
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.coins < amount) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
@@ -45,7 +46,7 @@ module.exports = {
             
             users.save();
         } catch (error) {
-            console.error('Error in dice command:', error);
+            console.error(`[Command Error] dice.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error playing dice game.')],
                 flags: 64

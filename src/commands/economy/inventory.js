@@ -9,7 +9,7 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.inventory.length === 0) {
                 return interaction.reply({ embeds: [createEmbed({
@@ -33,7 +33,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in inventory command:', error);
+            console.error(`[Command Error] inventory.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error retrieving inventory.')],
                 flags: 64

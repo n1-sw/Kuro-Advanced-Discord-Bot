@@ -37,11 +37,13 @@ module.exports = {
             
             modLogs.add(interaction.guild.id, 'BAN', interaction.user.id, target.id, reason);
             
-            await interaction.reply({ 
-                embeds: [successEmbed(`**${target.user.tag}** has been banned.\nReason: ${reason}`)] 
-            });
+            const { EmbedBuilder } = require('discord.js');
+            const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
+            
+const embed = AdvancedEmbed.commandSuccess('Operation Complete', 'Success');
         } catch (error) {
-            console.error('Ban error:', error);
+            console.error(`[Command Error] ban.js:`, error.message);
             await interaction.reply({ embeds: [errorEmbed('Failed to ban the user.')], flags: 64 });
         }
     }

@@ -16,7 +16,7 @@ module.exports = {
     async execute(interaction) {
         try {
             const itemIndex = interaction.options.getInteger('item') - 1;
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const data = users.get(interaction.guild.id, interaction.user.id);
             
             if (userData.inventory.length === 0) {
                 return interaction.reply({ embeds: [errorEmbed('Your inventory is empty.')], flags: 64 });
@@ -42,7 +42,7 @@ module.exports = {
                 )] 
             });
         } catch (error) {
-            console.error('Error in sell command:', error);
+            console.error(`[Command Error] sell.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error selling item.')],
                 flags: 64

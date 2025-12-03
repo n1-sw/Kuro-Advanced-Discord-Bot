@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { createEmbed, errorEmbed } = require('../../utils/helpers');
 const emoji = require('../../utils/emoji');
+const AdvancedEmbed = require('../../utils/advancedEmbed');
 const fs = require('fs');
 const path = require('path');
 
@@ -67,7 +68,7 @@ module.exports = {
             
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in updatecheck command:', error);
+            console.error(`[Command Error] updatecheck.js:`, error.message);
             await interaction.editReply({
                 embeds: [errorEmbed('Error performing update check.')],
                 flags: 64

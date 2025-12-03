@@ -24,7 +24,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in shop command:', error);
+            console.error(`[Command Error] shop.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error retrieving shop.')],
                 flags: 64

@@ -4,12 +4,13 @@
     "guildId": "1397638263300161638",
     "xp": 42,
     "level": 0,
-    "coins": 50,
+    "coins": 105,
     "warnings": [],
     "lastXpTime": 1764255109065,
-    "lastDaily": 1764256566089,
+    "lastDaily": 1764646848676,
     "inventory": [],
-    "totalMessages": 2
+    "totalMessages": 2,
+    "dailyStreak": 1
   },
   "1437796090656067729_1165314304308957367": {
     "userId": "1165314304308957367",
@@ -64,5 +65,29 @@
     "lastDaily": 0,
     "inventory": [],
     "totalMessages": 0
+  },
+  "1362426428037271552_698131338846404609": {
+    "userId": "698131338846404609",
+    "guildId": "1362426428037271552",
+    "xp": 155,
+    "level": 1,
+    "coins": 230,
+    "warnings": [],
+    "lastXpTime": 1764598834564,
+    "lastDaily": 0,
+    "inventory": [],
+    "totalMessages": 14
+  },
+  "1362426428037271552_1277577579251109962": {
+    "userId": "1277577579251109962",
+    "guildId": "1362426428037271552",
+    "xp": 42,
+    "level": 0,
+    "coins": 100,
+    "warnings": [],
+    "lastXpTime": 1764597192776,
+    "lastDaily": 0,
+    "inventory": [],
+    "totalMessages": 7
   }
 }

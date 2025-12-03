@@ -14,7 +14,7 @@ module.exports = {
     async execute(interaction) {
         try {
             const target = interaction.options.getMember('user') || interaction.member;
-            const userData = users.get(interaction.guild.id, target.id);
+            const data = users.get(interaction.guild.id, target.id);
             
             const embed = createEmbed({
                 title: `${target.user.username}'s Profile`,
@@ -35,7 +35,7 @@ module.exports = {
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
-            console.error('Error in userinfo command:', error);
+            console.error(`[Command Error] userinfo.js:`, error.message);
             await interaction.reply({
                 embeds: [errorEmbed('Error retrieving user information.')],
                 flags: 64
