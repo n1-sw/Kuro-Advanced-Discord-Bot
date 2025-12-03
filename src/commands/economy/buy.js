@@ -23,24 +23,28 @@ module.exports = {
             }
             
             const item = items[itemIndex];
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.coins < item.price) {
+            if ((userData.coins || 0) < item.price) {
                 return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. You need ${formatNumber(item.price)} coins.`)], flags: 64 });
             }
             
-            userData.coins -= item.price;
-            userData.inventory.push({
+            const newInventory = [...(userData.inventory || []), {
                 id: item.id,
                 name: item.name,
                 purchasedAt: Date.now()
+            }];
+            
+            const newCoins = (userData.coins || 0) - item.price;
+            await users.update(interaction.guild.id, interaction.user.id, {
+                coins: newCoins,
+                inventory: newInventory
             });
-            users.save();
             
             await interaction.reply({ 
                 embeds: [successEmbed(
                     `You purchased **${item.name}** for **${formatNumber(item.price)} coins**!\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**\n\n` +
+                    `New balance: **${formatNumber(newCoins)} coins**\n\n` +
                     `Check your inventory with \`/inventory\``
                 )] 
             });

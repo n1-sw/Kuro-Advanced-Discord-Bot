@@ -14,7 +14,7 @@ module.exports = {
     async execute(interaction) {
         try {
             const target = interaction.options.getMember('user') || interaction.member;
-            const data = users.get(interaction.guild.id, target.id);
+            const userData = await users.get(interaction.guild.id, target.id);
             
             const embed = createEmbed({
                 title: `${target.user.username}'s Profile`,
@@ -24,12 +24,12 @@ module.exports = {
                     { name: 'User ID', value: target.id, inline: true },
                     { name: 'Account Created', value: `<t:${Math.floor(target.user.createdTimestamp / 1000)}:d>`, inline: true },
                     { name: 'Joined Server', value: `<t:${Math.floor(target.joinedTimestamp / 1000)}:d>`, inline: true },
-                    { name: 'Level', value: String(userData.level), inline: true },
-                    { name: 'Total XP', value: String(userData.xp), inline: true },
-                    { name: 'Balance', value: `${userData.coins} coins`, inline: true },
-                    { name: 'Messages', value: String(userData.totalMessages), inline: true },
-                    { name: 'Warnings', value: String(userData.warnings.length), inline: true },
-                    { name: 'Inventory', value: `${userData.inventory.length} item(s)`, inline: true }
+                    { name: 'Level', value: String(userData.level || 0), inline: true },
+                    { name: 'Total XP', value: String(userData.xp || 0), inline: true },
+                    { name: 'Balance', value: `${userData.coins || 0} coins`, inline: true },
+                    { name: 'Messages', value: String(userData.totalMessages || 0), inline: true },
+                    { name: 'Warnings', value: String((userData.warnings || []).length), inline: true },
+                    { name: 'Inventory', value: `${(userData.inventory || []).length} item(s)`, inline: true }
                 ]
             });
             

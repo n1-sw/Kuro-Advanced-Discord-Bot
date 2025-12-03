@@ -19,32 +19,32 @@ module.exports = {
         try {
             const amount = interaction.options.getInteger('amount');
             
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.coins < amount) {
-                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
+            if ((userData.coins || 0) < amount) {
+                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins || 0)}`)], flags: 64 });
             }
             
             const roll = randomInt(1, 100);
             
             if (roll <= 45) {
                 const winnings = amount * 2;
-                userData.coins += amount;
+                const newCoins = (userData.coins || 0) + amount;
+                await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
                 await interaction.reply({ embeds: [successEmbed(
                     `${emoji.gamble} You rolled **${roll}** (needed 45 or below)\n` +
                     `You won **${formatNumber(winnings)} coins**!\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**`
+                    `New balance: **${formatNumber(newCoins)} coins**`
                 )] });
             } else {
-                userData.coins -= amount;
+                const newCoins = (userData.coins || 0) - amount;
+                await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
                 await interaction.reply({ embeds: [errorEmbed(
                     `${emoji.gamble} You rolled **${roll}** (needed 45 or below)\n` +
                     `You lost **${formatNumber(amount)} coins**.\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**`
+                    `New balance: **${formatNumber(newCoins)} coins**`
                 )] });
             }
-            
-            users.save();
         } catch (error) {
             console.error(`[Command Error] gamble.js:`, error.message);
             await interaction.reply({

@@ -160,10 +160,10 @@ module.exports = {
                 }
 
                 if (game.gameOver) {
-                    const data = users.get(interaction.guild.id, interaction.user.id);
+                    const userData = await users.get(interaction.guild.id, interaction.user.id);
                     const reward = game.score;
-                    userData.coins += reward;
-                    users.save();
+                    const newCoins = (userData.coins || 0) + reward;
+                    await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
 
                     const endEmbed = AdvancedEmbed.game(`Game Over`, `${game.render()}\n**Final Score:** ${game.score}\n**Reward:** +${formatNumber(reward)} coins`, []);
                     await i.update({ embeds: [endEmbed], components: createButtons(true) });

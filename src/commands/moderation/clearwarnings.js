@@ -20,15 +20,14 @@ module.exports = {
                 return interaction.reply({ embeds: [errorEmbed('User not found in this server.')], flags: 64 });
             }
             
-            const data = users.get(interaction.guild.id, target.id);
-            const warningCount = userData.warnings.length;
+            const userData = await users.get(interaction.guild.id, target.id);
+            const warningCount = (userData.warnings || []).length;
             
             if (warningCount === 0) {
                 return interaction.reply({ embeds: [errorEmbed('This user has no warnings.')], flags: 64 });
             }
             
-            userData.warnings = [];
-            users.save();
+            await users.update(interaction.guild.id, target.id, { warnings: [] });
             
             modLogs.add(interaction.guild.id, 'CLEAR_WARNINGS', interaction.user.id, target.id, `Cleared ${warningCount} warnings`);
             

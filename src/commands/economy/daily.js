@@ -12,27 +12,31 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const userData = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             const now = Date.now();
             const cooldown = 24 * 60 * 60 * 1000;
             
             if (!userData.dailyStreak) userData.dailyStreak = 0;
             
-            if (now - userData.lastDaily < cooldown) {
-                const remaining = cooldown - (now - userData.lastDaily);
+            if (now - (userData.lastDaily || 0) < cooldown) {
+                const remaining = cooldown - (now - (userData.lastDaily || 0));
                 const embed = AdvancedEmbed.warning('Daily Reward', `You've already claimed your daily reward!\n\nNext claim in: \`${formatDuration(remaining)}\``);
                 return interaction.reply({ embeds: [embed], flags: 64 });
             }
             
             userData.dailyStreak++;
             const baseReward = config.economy.dailyReward;
-            const levelBonus = Math.floor(userData.level * 10);
+            const levelBonus = Math.floor((userData.level || 0) * 10);
             const streakBonus = Math.floor(userData.dailyStreak * 5);
             const totalReward = baseReward + levelBonus + streakBonus;
             
-            userData.coins += totalReward;
-            userData.lastDaily = now;
-            users.save();
+            await users.update(interaction.guild.id, interaction.user.id, {
+                coins: (userData.coins || 0) + totalReward,
+                lastDaily: now,
+                dailyStreak: userData.dailyStreak
+            });
+            
+            userData.coins = (userData.coins || 0) + totalReward;
             
             const embed = AdvancedEmbed.economy(`Daily Reward Claimed`, `💝 You earned \`${formatNumber(totalReward)}\` coins!`, [
                 { name: `${emoji.coin} Base Reward`, value: `\`${formatNumber(baseReward)}\``, inline: true },

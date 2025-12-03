@@ -16,9 +16,9 @@ module.exports = {
     async execute(interaction) {
         try {
             const itemIndex = interaction.options.getInteger('item') - 1;
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.inventory.length === 0) {
+            if (!userData.inventory || userData.inventory.length === 0) {
                 return interaction.reply({ embeds: [errorEmbed('Your inventory is empty.')], flags: 64 });
             }
             
@@ -31,14 +31,19 @@ module.exports = {
             
             const sellPrice = shopItem ? Math.floor(shopItem.price * 0.5) : 10;
             
-            userData.coins += sellPrice;
-            userData.inventory.splice(itemIndex, 1);
-            users.save();
+            const newInventory = [...userData.inventory];
+            newInventory.splice(itemIndex, 1);
+            const newCoins = (userData.coins || 0) + sellPrice;
+            
+            await users.update(interaction.guild.id, interaction.user.id, {
+                coins: newCoins,
+                inventory: newInventory
+            });
             
             await interaction.reply({ 
                 embeds: [successEmbed(
                     `You sold **${inventoryItem.name}** for **${formatNumber(sellPrice)} coins**!\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**`
+                    `New balance: **${formatNumber(newCoins)} coins**`
                 )] 
             });
         } catch (error) {

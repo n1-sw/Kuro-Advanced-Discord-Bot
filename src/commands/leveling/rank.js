@@ -29,7 +29,7 @@ module.exports = {
             await interaction.deferReply();
             
             const target = interaction.options.getMember('user') || interaction.member;
-            const userData = users.get(interaction.guild.id, target.id) || { level: 0, xp: 0, dailyStreak: 0, totalMessages: 0, coins: 0 };
+            const userData = await users.get(interaction.guild.id, target.id);
             
             if (!userData.dailyStreak) userData.dailyStreak = 0;
             if (!userData.totalMessages) userData.totalMessages = 0;
@@ -43,38 +43,34 @@ module.exports = {
             const xpNeededForNext = calculateXpForLevel(userData.level || 0);
             const progressPercent = xpNeededForNext > 0 ? Math.floor((xpInCurrentLevel / xpNeededForNext) * 100) : 0;
             
-            const guildUsers = Object.entries(users.data || {})
-                .filter(([key]) => key.startsWith(interaction.guild.id))
-                .map(([, data]) => data)
-                .sort((a, b) => (b.level || 0) - (a.level || 0) || (b.xp || 0) - (a.xp || 0)) || [];
-            
-            const rank = guildUsers.findIndex(u => u.userId === target.id) + 1;
+            const leaderboard = await users.getLeaderboard(interaction.guild.id, 'level', 100);
+            const rank = leaderboard.findIndex(u => u.odId === target.id) + 1 || leaderboard.length + 1;
             const rankTitle = getRankTitle(userData.level || 0);
 
-            const embed = AdvancedEmbed.leveling?.(
+            const embed = AdvancedEmbed.leveling(
                 `${rankTitle} • Level ${userData.level || 0}`,
-                `${target.user?.username || 'User'}'s Rank Card\n\n${progressBar?.(xpInCurrentLevel, xpNeededForNext, 20) || `${Math.round(progressPercent)}% XP`}`,
+                `${target.user?.username || 'User'}'s Rank Card\n\n${progressBar(xpInCurrentLevel, xpNeededForNext, 20)} ${Math.round(progressPercent)}%`,
                 [
                     { name: `${emoji.leveling} Level`, value: `\`${userData.level || 0}\``, inline: true },
-                    { name: `${emoji.chart} Rank`, value: `\`#${rank}/${guildUsers.length || 1}\``, inline: true },
+                    { name: `${emoji.chart} Rank`, value: `\`#${rank}/${leaderboard.length || 1}\``, inline: true },
                     { name: `${emoji.fire} Streak`, value: `\`${userData.dailyStreak || 0}\` days`, inline: true },
                     { name: `${emoji.messages} Messages`, value: `\`${userData.totalMessages || 0}\``, inline: true },
                     { name: `${emoji.diamond} Coins`, value: `\`${formatNumber(userData.coins || 0)}\``, inline: true },
                     { name: `${emoji.star} XP`, value: `\`${xpInCurrentLevel}/${xpNeededForNext}\``, inline: true }
                 ],
                 target.user?.displayAvatarURL?.({ size: 256 })
-            ) || new (require('discord.js').EmbedBuilder)().setTitle(`${rankTitle} • Level ${userData.level || 0}`).setDescription(`Rank #${rank}`);
+            );
 
             await interaction.editReply({ embeds: [embed] }).catch(() => {
                 interaction.editReply({ content: `📊 **${rankTitle}** • Level ${userData.level || 0} | Rank #${rank}` });
             });
         } catch (error) {
             console.error(`[rank.js]`, error.message);
-            const embed = AdvancedEmbed.commandError?.('Rank Failed', error.message || 'Could not load rank card') || new (require('discord.js').EmbedBuilder)().setTitle('Error').setDescription('Failed to load rank');
+            const embed = AdvancedEmbed.commandError('Rank Failed', 'Could not load rank card');
             if (!interaction.replied && interaction.deferred) {
-                await interaction.editReply({ embeds: [embed] }).catch(() => {
-                    interaction.editReply({ content: '❌ Error loading rank card' });
-                });
+                await interaction.editReply({ embeds: [embed] }).catch(() => {});
+            } else if (!interaction.replied) {
+                await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
             }
         }
     }

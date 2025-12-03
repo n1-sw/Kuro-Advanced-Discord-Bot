@@ -241,12 +241,12 @@ module.exports = {
             }
 
             if (bet > 0) {
-                const p1Data = users.get(interaction.guild.id, player1.id) || { coins: 0 };
-                const p2Data = users.get(interaction.guild.id, opponent.id) || { coins: 0 };
-                if (p1Data.coins < bet) {
+                const p1DataCheck = await users.get(interaction.guild.id, player1.id);
+                const p2DataCheck = await users.get(interaction.guild.id, opponent.id);
+                if ((p1DataCheck.coins || 0) < bet) {
                     return interaction.reply({ content: `${emoji.error} You don't have enough coins!`, flags: 64 })
                 }
-                if (p2Data.coins < bet) {
+                if ((p2DataCheck.coins || 0) < bet) {
                     return interaction.reply({ content: `${emoji.error} ${opponent.username} doesn't have enough coins!`, flags: 64 })
                 }
             }
@@ -284,9 +284,45 @@ module.exports = {
                     return;
                 }
 
-                const game = new ChessGame(player1.id, opponent.id, bet)
-                activeGames.set(player1.id, game)
-                activeGames.set(opponent.id, game)
+                let betsDeducted = false;
+                let game = null;
+                
+                const refundBets = async () => {
+                    if (betsDeducted && bet > 0) {
+                        try {
+                            const refundP1 = await users.get(interaction.guild.id, player1.id);
+                            const refundP2 = await users.get(interaction.guild.id, opponent.id);
+                            await users.update(interaction.guild.id, player1.id, { coins: (refundP1.coins || 0) + bet });
+                            await users.update(interaction.guild.id, opponent.id, { coins: (refundP2.coins || 0) + bet });
+                            console.log(`[Chess] Refunded ${bet} coins to both players`);
+                        } catch (refundError) {
+                            console.error('[Chess] Refund error:', refundError.message);
+                        }
+                    }
+                    activeGames.delete(player1.id);
+                    activeGames.delete(opponent.id);
+                };
+
+                try {
+                    if (bet > 0) {
+                        const currentP1Data = await users.get(interaction.guild.id, player1.id);
+                        const currentP2Data = await users.get(interaction.guild.id, opponent.id);
+                        if ((currentP1Data.coins || 0) < bet) {
+                            await i.update({ embeds: [new EmbedBuilder().setDescription(`${emoji.error} ${player1.username} no longer has enough coins!`).setColor(emoji.color_error)], components: [] })
+                            return;
+                        }
+                        if ((currentP2Data.coins || 0) < bet) {
+                            await i.update({ embeds: [new EmbedBuilder().setDescription(`${emoji.error} ${opponent.username} no longer has enough coins!`).setColor(emoji.color_error)], components: [] })
+                            return;
+                        }
+                        await users.update(interaction.guild.id, player1.id, { coins: (currentP1Data.coins || 0) - bet });
+                        await users.update(interaction.guild.id, opponent.id, { coins: (currentP2Data.coins || 0) - bet });
+                        betsDeducted = true;
+                    }
+
+                    game = new ChessGame(player1.id, opponent.id, bet)
+                    activeGames.set(player1.id, game)
+                    activeGames.set(opponent.id, game)
 
                 const createGameEmbed = () => {
                     let status;
@@ -397,11 +433,8 @@ module.exports = {
                     if (gi.customId === 'chess_resign') {
                         game.resign()
                         if (bet > 0) {
-                            const winnerData = users.get(interaction.guild.id, game.winner) || { coins: 0 };
-                            const loserData = users.get(interaction.guild.id, gi.user.id) || { coins: 0 };
-                            winnerData.coins += bet;
-                            loserData.coins -= bet;
-                            users.save()
+                            const winnerData = await users.get(interaction.guild.id, game.winner);
+                            await users.update(interaction.guild.id, game.winner, { coins: (winnerData.coins || 0) + bet * 2 });
                         }
                         activeGames.delete(player1.id)
                         activeGames.delete(opponent.id)
@@ -437,14 +470,8 @@ module.exports = {
                             
                             if (game.winner) {
                                 if (bet > 0) {
-                                    if (game.winner === player1.id) {
-                                        p1Data.coins += bet;
-                                        p2Data.coins -= bet;
-                                    } else {
-                                        p2Data.coins += bet;
-                                        p1Data.coins -= bet;
-                                    }
-                                    users.save()
+                                    const winnerData = await users.get(interaction.guild.id, game.winner);
+                                    await users.update(interaction.guild.id, game.winner, { coins: (winnerData.coins || 0) + bet * 2 });
                                 }
                                 activeGames.delete(player1.id)
                                 activeGames.delete(opponent.id)
@@ -463,12 +490,21 @@ module.exports = {
                     }
                 })
 
-                gameCollector.on('end', () => {
-                    activeGames.delete(player1.id)
-                    activeGames.delete(opponent.id)
+                gameCollector.on('end', async (collected, reason) => {
+                    if (!game.winner && betsDeducted && bet > 0) {
+                        await refundBets();
+                    } else {
+                        activeGames.delete(player1.id);
+                        activeGames.delete(opponent.id);
+                    }
                 })
 
                 collector.stop()
+                } catch (gameError) {
+                    console.error('[Chess] Game setup error:', gameError.message);
+                    await refundBets();
+                    throw gameError;
+                }
             })
 
             collector.on('end', (collected, reason) => {

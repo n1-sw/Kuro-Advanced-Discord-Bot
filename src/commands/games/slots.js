@@ -21,10 +21,10 @@ module.exports = {
             const amount = interaction.options.getInteger('amount');
             const { jackpotMultiplier } = config.games.slots;
             
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.coins < amount) {
-                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
+            if ((userData.coins || 0) < amount) {
+                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins || 0)}`)], flags: 64 });
             }
             
             const symbols = [emoji.slot_seven, emoji.slot_cherry, emoji.slot_lemon, emoji.slot_orange, emoji.slot_grape];
@@ -63,13 +63,14 @@ module.exports = {
                 resultMessage = `${emoji.gamble} No match. You lost **${formatNumber(amount)} coins**.`;
             }
             
-            userData.coins += winnings;
-            users.save();
+            const newCoins = (userData.coins || 0) + winnings;
+            await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
             
             const color = winnings > 0 ? emoji.color_success : emoji.color_error;
             const resultTitle = winnings > 0 ? `🎰 ${winnings === amount * (config.games.slots.jackpotMultiplier || 10) ? 'JACKPOT!!!!' : 'YOU WON!'}` : `🎰 Better Luck Next Time`;
             
-const embed = AdvancedEmbed.commandSuccess('Operation Complete', 'Success');
+            const embed = AdvancedEmbed.game(resultTitle, `${slotDisplay}\n\n${resultMessage}\n\nNew balance: **${formatNumber(newCoins)} coins**`, []);
+            await interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error(`[Command Error] slots.js:`, error.message);
             await interaction.reply({

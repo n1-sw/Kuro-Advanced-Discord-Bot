@@ -9,9 +9,9 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.inventory.length === 0) {
+            if (!userData.inventory || userData.inventory.length === 0) {
                 return interaction.reply({ embeds: [createEmbed({
                     title: `${interaction.user.username}'s Inventory`,
                     description: 'Your inventory is empty. Buy items from the `/shop`!',

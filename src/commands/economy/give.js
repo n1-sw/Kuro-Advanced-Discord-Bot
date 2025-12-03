@@ -33,22 +33,24 @@ module.exports = {
                 return interaction.reply({ embeds: [errorEmbed('You cannot give coins to bots.')], flags: 64 });
             }
             
-            const senderData = users.get(interaction.guild.id, interaction.user.id) || { coins: 0 };
+            const senderData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (senderData.coins < amount) {
-                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(senderData.coins)}`)], flags: 64 });
+            if ((senderData.coins || 0) < amount) {
+                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(senderData.coins || 0)}`)], flags: 64 });
             }
             
-            const receiverData = users.get(interaction.guild.id, target.id) || { coins: 0 };
+            const receiverData = await users.get(interaction.guild.id, target.id);
             
-            senderData.coins -= amount;
-            receiverData.coins += amount;
-            users.save();
+            const newSenderCoins = (senderData.coins || 0) - amount;
+            const newReceiverCoins = (receiverData.coins || 0) + amount;
+            
+            await users.update(interaction.guild.id, interaction.user.id, { coins: newSenderCoins });
+            await users.update(interaction.guild.id, target.id, { coins: newReceiverCoins });
             
             await interaction.reply({ 
                 embeds: [successEmbed(
                     `You gave **${formatNumber(amount)} coins** to ${target.user.username}!\n` +
-                    `Your new balance: **${formatNumber(senderData.coins)} coins**`
+                    `Your new balance: **${formatNumber(newSenderCoins)} coins**`
                 )] 
             });
         } catch (error) {

@@ -22,7 +22,7 @@ module.exports = {
                 })], flags: 64 });
             }
             
-            const data = users.get(interaction.guild.id, target.id);
+            const userData = await users.get(interaction.guild.id, target.id);
             const warnings = userData.warnings || [];
             
             if (warnings.length === 0) {

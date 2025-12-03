@@ -19,7 +19,7 @@ class StatusWebhook {
     validateUrl(url) {
         if (!url) return false;
         try {
-            return url.startsWith('https://discord.com/api/webhooks/1445070200847466556/x3WAlbRYYY52DjxXc6SLeB3zREwlmu-4agmln71dv7dEyNI2rNk5t1wVHUki4doMD-YX');
+            return url.startsWith('https://discord.com/api/webhooks/');
         } catch {
             return false;
         }

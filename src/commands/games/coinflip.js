@@ -27,32 +27,33 @@ module.exports = {
             const userChoice = interaction.options.getString('choice');
             const amount = interaction.options.getInteger('amount');
             
-            const data = users.get(interaction.guild.id, interaction.user.id);
+            const userData = await users.get(interaction.guild.id, interaction.user.id);
             
-            if (userData.coins < amount) {
-                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins)}`)], flags: 64 });
+            if ((userData.coins || 0) < amount) {
+                return interaction.reply({ embeds: [errorEmbed(`You don't have enough coins. Balance: ${formatNumber(userData.coins || 0)}`)], flags: 64 });
             }
             
             const result = Math.random() < 0.5 ? 'heads' : 'tails';
             const won = userChoice === result;
             
+            let newCoins;
             if (won) {
-                userData.coins += amount;
+                newCoins = (userData.coins || 0) + amount;
+                await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
                 await interaction.reply({ embeds: [successEmbed(
                     `🪙 The coin landed on **${result}**!\n` +
                     `You won **${formatNumber(amount)} coins**!\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**`
+                    `New balance: **${formatNumber(newCoins)} coins**`
                 )] });
             } else {
-                userData.coins -= amount;
+                newCoins = (userData.coins || 0) - amount;
+                await users.update(interaction.guild.id, interaction.user.id, { coins: newCoins });
                 await interaction.reply({ embeds: [errorEmbed(
                     `🪙 The coin landed on **${result}**...\n` +
                     `You lost **${formatNumber(amount)} coins**.\n` +
-                    `New balance: **${formatNumber(userData.coins)} coins**`
+                    `New balance: **${formatNumber(newCoins)} coins**`
                 )] });
             }
-            
-            users.save();
         } catch (error) {
             console.error(`[Command Error] coinflip.js:`, error.message);
             if (!interaction.replied) {
