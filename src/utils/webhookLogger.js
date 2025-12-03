@@ -7,7 +7,6 @@ class WebhookLogger {
         this.webhookUrl = webhookUrl;
         this.enabled = this.validateUrl(webhookUrl);
         
-        // Advanced real-time analytics
         this.metrics = {
             commands: new Map(),
             events: new Map(),
@@ -44,6 +43,10 @@ class WebhookLogger {
         };
         
         this.reportInterval = 5000;
+        this.consoleInterval = null;
+        this.consoleWebhookUrl = null;
+        this.consoleEnabled = false;
+        this.lastConsoleMessageId = null;
         
         if (this.enabled) {
             this.startAutoReporting();
@@ -53,7 +56,7 @@ class WebhookLogger {
     validateUrl(url) {
         if (!url) return false;
         try {
-            return url.startsWith('https://discord.com/api/webhooks/1445081240016392374/TA92u-YuvIsd9gkU9P3TttwiQR4WBNy3vwbzwXBkRhnf-LuXqbOkDwliUTroAmLtXGm6');
+            return url.startsWith('https://discord.com/api/webhooks/');
         } catch {
             return false;
         }
@@ -65,50 +68,151 @@ class WebhookLogger {
             this.cleanupOldData();
         }, this.reportInterval);
         
-        // Trigger garbage collection every 5 minutes to prevent memory bloat
-        setInterval(() => {
-            if (global.gc) global.gc();
-        }, 5 * 60 * 1000);
+        console.log(`${emoji.success} Advanced analytics engine started (5s intervals)`);
+    }
+    
+    startRealTimeConsole(webhookUrl, intervalMs = 1000) {
+        if (!this.validateUrl(webhookUrl)) {
+            console.log(`${emoji.warning} Invalid console webhook URL`);
+            return false;
+        }
         
-        console.log(`${emoji.success} Advanced analytics engine started (10s intervals)`);
+        this.consoleWebhookUrl = webhookUrl;
+        this.consoleEnabled = true;
+        
+        this.consoleInterval = setInterval(() => {
+            this.sendConsoleUpdate();
+        }, intervalMs);
+        
+        console.log(`${emoji.success} Real-time console started (${intervalMs}ms intervals)`);
+        return true;
+    }
+    
+    stopRealTimeConsole() {
+        if (this.consoleInterval) {
+            clearInterval(this.consoleInterval);
+            this.consoleInterval = null;
+            this.consoleEnabled = false;
+            console.log(`${emoji.warning} Real-time console stopped`);
+        }
+    }
+    
+    async sendConsoleUpdate() {
+        if (!this.consoleEnabled || !this.consoleWebhookUrl) return;
+        
+        try {
+            const now = new Date();
+            const uptime = Date.now() - this.startTime;
+            const memUsage = process.memoryUsage();
+            const heapPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+            const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+            const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+            
+            const recentActivity = this.activityLog.slice(-5).reverse();
+            const activityLines = recentActivity.map(a => {
+                const time = new Date(a.timestamp).toLocaleTimeString();
+                if (a.type === 'COMMAND') {
+                    return `[${time}] ${a.details.success ? '✅' : '❌'} /${a.details.name} (${a.details.executionTime}ms)`;
+                } else if (a.type === 'MESSAGE') {
+                    return `[${time}] 💬 Message from ${a.details.author?.substring(0, 8) || 'unknown'}...`;
+                } else if (a.type === 'EVENT') {
+                    return `[${time}] ⚡ ${a.details.name}`;
+                }
+                return `[${time}] 📌 ${a.type}`;
+            }).join('\n') || 'No recent activity';
+            
+            const recentErrors = this.errorLog.slice(-3).reverse();
+            const errorLines = recentErrors.map(e => {
+                const time = new Date(e.timestamp).toLocaleTimeString();
+                return `[${time}] 🚨 ${e.title.substring(0, 30)}`;
+            }).join('\n') || 'No errors';
+            
+            const topCmd = Array.from(this.metrics.commands.entries())
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 3)
+                .map(([cmd, stats]) => `/${cmd}: ${stats.total}`)
+                .join(' | ') || 'None';
+            
+            const memBar = this.createProgressBar(heapPercent, 10);
+            const healthStatus = heapPercent > 80 ? '🔴 CRITICAL' : heapPercent > 60 ? '🟡 WARNING' : '🟢 HEALTHY';
+            
+            const consoleEmbed = new EmbedBuilder()
+                .setTitle(`${emoji.terminal} Live Console Monitor`)
+                .setColor(heapPercent > 80 ? emoji.color_error : heapPercent > 60 ? emoji.color_warning : emoji.color_console)
+                .setDescription(
+                    `\`\`\`ansi\n` +
+                    `[2;34m╔══════════════════════════════════════╗[0m\n` +
+                    `[2;34m║[0m [1;32mSYSTEM STATUS[0m            ${healthStatus}  [2;34m║[0m\n` +
+                    `[2;34m╠══════════════════════════════════════╣[0m\n` +
+                    `[2;34m║[0m Uptime: ${this.formatUptime(uptime).padEnd(28)}[2;34m║[0m\n` +
+                    `[2;34m║[0m Memory: ${memBar} ${heapPercent}%`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m║[0m Heap: ${heapMB}MB / RSS: ${rssMB}MB`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m║[0m Ping: ${this.metrics.performance.avgPing}ms avg`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m╠══════════════════════════════════════╣[0m\n` +
+                    `[2;34m║[0m [1;33mSESSION STATS[0m                        [2;34m║[0m\n` +
+                    `[2;34m║[0m Commands: ${this.sessionMetrics.totalCommands}`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m║[0m Messages: ${this.sessionMetrics.totalMessages}`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m║[0m Errors: ${this.sessionMetrics.totalErrors}`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m║[0m Users: ${this.sessionMetrics.uniqueUsers.size}`.padEnd(39) + `[2;34m║[0m\n` +
+                    `[2;34m╚══════════════════════════════════════╝[0m\n` +
+                    `\`\`\``
+                )
+                .addFields(
+                    { name: `${emoji.lightning} Recent Activity`, value: `\`\`\`\n${activityLines}\n\`\`\``, inline: false },
+                    { name: `${emoji.chart} Top Commands`, value: `\`${topCmd}\``, inline: true },
+                    { name: `${emoji.error} Recent Errors`, value: `\`\`\`\n${errorLines}\n\`\`\``, inline: false }
+                )
+                .setFooter({ text: `🔄 Live Update | ${now.toLocaleTimeString()}` })
+                .setTimestamp();
+            
+            const payload = { embeds: [consoleEmbed] };
+            
+            await fetch(this.consoleWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(() => {});
+            
+        } catch (error) {
+            console.error('Console update error:', error?.message);
+        }
+    }
+    
+    createProgressBar(percent, length = 10) {
+        const filled = Math.round((percent / 100) * length);
+        const empty = length - filled;
+        return '█'.repeat(filled) + '░'.repeat(empty);
     }
     
     cleanupOldData() {
-        // Limit activity logs to last 1000 entries
         if (this.activityLog.length > 1000) {
             this.activityLog = this.activityLog.slice(-1000);
         }
         
-        // Limit error logs to last 500 entries
         if (this.errorLog.length > 500) {
             this.errorLog = this.errorLog.slice(-500);
         }
         
-        // Limit performance alerts to last 200 entries
         if (this.performanceAlerts.length > 200) {
             this.performanceAlerts = this.performanceAlerts.slice(-200);
         }
         
-        // Limit response times history to last 100 entries
         if (this.metrics.performance.responseTimes.length > 100) {
             this.metrics.performance.responseTimes = this.metrics.performance.responseTimes.slice(-100);
         }
         
-        // Limit CPU usage history to last 100 entries
         if (this.metrics.performance.cpuUsage.length > 100) {
             this.metrics.performance.cpuUsage = this.metrics.performance.cpuUsage.slice(-100);
         }
         
-        // Limit memory snapshots to last 50 entries
         if (this.metrics.performance.memorySnapshots.length > 50) {
             this.metrics.performance.memorySnapshots = this.metrics.performance.memorySnapshots.slice(-50);
         }
     }
 
-    // ===== ADVANCED COMMAND TRACKING =====
-    recordCommand(commandName, success = true, executionTime = 0, userId, guildId) {
+    recordCommand(commandName, success = true, executionTime = 0, odId, guildId) {
         this.sessionMetrics.totalCommands++;
-        this.sessionMetrics.uniqueUsers.add(userId);
+        this.sessionMetrics.uniqueUsers.add(odId);
         this.sessionMetrics.uniqueGuilds.add(guildId);
 
         if (!this.metrics.commands.has(commandName)) {
@@ -128,7 +232,7 @@ class WebhookLogger {
         const cmdStats = this.metrics.commands.get(commandName);
         cmdStats.total++;
         cmdStats.lastExecuted = new Date();
-        cmdStats.users.add(userId);
+        cmdStats.users.add(odId);
         cmdStats.timings.push(executionTime);
 
         if (cmdStats.timings.length > 50) cmdStats.timings.shift();
@@ -142,13 +246,12 @@ class WebhookLogger {
             cmdStats.failed++;
         }
 
-        // Detect performance bottlenecks
         if (executionTime > 1000) {
             this.performanceAlerts.push({
                 type: 'SLOW_COMMAND',
                 command: commandName,
                 time: executionTime,
-                user: userId,
+                user: odId,
                 guild: guildId,
                 timestamp: new Date()
             });
@@ -159,7 +262,7 @@ class WebhookLogger {
             name: commandName,
             success,
             executionTime,
-            userId,
+            odId,
             guildId
         });
     }
@@ -190,10 +293,10 @@ class WebhookLogger {
         this.sessionMetrics.uniqueUsers.add(author);
         this.sessionMetrics.uniqueGuilds.add(guildId);
 
-        const contentLength = content.length;
-        const hasLinks = /(https?:\/\/[^\s]+)/gi.test(content);
-        const hasMentions = /@/g.test(content);
-        const wordCount = content.split(/\s+/).length;
+        const contentLength = content?.length || 0;
+        const hasLinks = /(https?:\/\/[^\s]+)/gi.test(content || '');
+        const hasMentions = /@/g.test(content || '');
+        const wordCount = (content || '').split(/\s+/).length;
 
         if (!this.userActivityHeatmap.has(author)) {
             this.userActivityHeatmap.set(author, { messages: 0, chars: 0, activity: [] });
@@ -216,14 +319,14 @@ class WebhookLogger {
         });
     }
 
-    recordInteraction(interactionType, userId, guildId, details = {}) {
+    recordInteraction(interactionType, odId, guildId, details = {}) {
         this.sessionMetrics.totalInteractions++;
-        this.sessionMetrics.uniqueUsers.add(userId);
+        this.sessionMetrics.uniqueUsers.add(odId);
         this.sessionMetrics.uniqueGuilds.add(guildId);
 
         this.recordActivityLog('INTERACTION', {
             type: interactionType,
-            userId,
+            odId,
             guildId,
             ...details
         });
@@ -306,21 +409,21 @@ class WebhookLogger {
 
         try {
             const embed = new EmbedBuilder()
-                .setTitle(`🚨 ${title}`)
+                .setTitle(`${emoji.alert} ${title}`)
                 .setDescription(message || 'Unknown error')
                 .setColor(emoji.color_error)
                 .setTimestamp()
                 .addFields(
                     { name: `${emoji.error} Error Count`, value: `\`${errorStats.count}\``, inline: true },
-                    { name: `${emoji.timer} First Seen`, value: `\`${new Date(errorStats.lastOccurred).toLocaleTimeString()}\``, inline: true },
+                    { name: `${emoji.timer} Time`, value: `\`${new Date().toLocaleTimeString()}\``, inline: true },
                     { name: `${emoji.settings} Environment`, value: process.env.NODE_ENV || 'production', inline: true }
                 );
 
             if (details.commandName) {
                 embed.addFields({ name: `${emoji.list} Command`, value: `/${details.commandName}`, inline: true });
             }
-            if (details.userId) {
-                embed.addFields({ name: `${emoji.id} User`, value: `\`${details.userId}\``, inline: true });
+            if (details.odId) {
+                embed.addFields({ name: `${emoji.id} User`, value: `\`${details.odId}\``, inline: true });
             }
             if (details.guildId) {
                 embed.addFields({ name: `${emoji.server} Guild`, value: `\`${details.guildId}\``, inline: true });
@@ -351,38 +454,33 @@ class WebhookLogger {
             const memUsage = process.memoryUsage();
             const heapPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
 
-            // Get top commands
             const topCommands = Array.from(this.metrics.commands.entries())
                 .sort((a, b) => b[1].total - a[1].total)
                 .slice(0, 5)
                 .map(([cmd, stats]) => `\`${cmd}\` (${stats.total}x, ${stats.successful}✅)`)
                 .join('\n') || 'None';
 
-            // Get performance summary
             const topPerformanceIssues = this.performanceAlerts
                 .slice(-5)
                 .map(alert => `⚠️ \`${alert.command}\` took \`${alert.time}ms\``)
                 .join('\n') || 'Excellent';
 
-            // Get user activity summary
             const activeUsers = this.userActivityHeatmap.size;
             const totalMessages = Array.from(this.userActivityHeatmap.values())
                 .reduce((sum, u) => sum + u.messages, 0);
 
-            // Get most active events
             const topEvents = Array.from(this.metrics.events.entries())
                 .sort((a, b) => b[1].total - a[1].total)
                 .slice(0, 3)
                 .map(([evt, stats]) => `\`${evt}\` (${stats.total}x)`)
                 .join('\n') || 'None';
 
-            // Server health check
             const healthyServers = Array.from(this.serverHealth.values())
                 .filter(h => h.avgPing < 200).length;
             const totalServers = this.serverHealth.size;
 
             const embed = new EmbedBuilder()
-                .setTitle(`${emoji.health} 📊 Advanced Analytics Report (10s)`)
+                .setTitle(`${emoji.health} Analytics Report`)
                 .setDescription(`Real-time bot intelligence dashboard`)
                 .setColor(emoji.color_success)
                 .addFields(
@@ -390,18 +488,17 @@ class WebhookLogger {
                     { name: `${emoji.lightning} API Performance`, value: `\`${this.metrics.performance.avgPing}ms\` avg`, inline: true },
                     { name: `${emoji.health} Heap Usage`, value: `\`${heapPercent}%\` used`, inline: true },
                     
-                    { name: `${emoji.chart} 📈 Command Analytics`, value: `Total: \`${this.sessionMetrics.totalCommands}\`\n${topCommands}`, inline: true },
-                    { name: `${emoji.people} 👥 User Activity`, value: `Active: \`${activeUsers}\` users\nMessages: \`${totalMessages}\``, inline: true },
-                    { name: `${emoji.server} 🖥️ Server Health`, value: `\`${healthyServers}/${totalServers}\` servers healthy\nAvg Latency: \`${this.metrics.performance.avgPing}ms\``, inline: true },
+                    { name: `${emoji.chart} Command Analytics`, value: `Total: \`${this.sessionMetrics.totalCommands}\`\n${topCommands}`, inline: true },
+                    { name: `${emoji.people} User Activity`, value: `Active: \`${activeUsers}\` users\nMessages: \`${totalMessages}\``, inline: true },
+                    { name: `${emoji.server} Server Health`, value: `\`${healthyServers}/${totalServers}\` servers healthy`, inline: true },
                     
-                    { name: `${emoji.warning} ⚡ Performance Alerts`, value: topPerformanceIssues, inline: false },
-                    { name: `${emoji.list} 🎯 Top Events`, value: topEvents, inline: true },
-                    { name: `${emoji.error} 🚨 Error Rate`, value: `Total Errors: \`${this.sessionMetrics.totalErrors}\`\nSessions: \`${this.errorLog.length}\``, inline: true },
+                    { name: `${emoji.warning} Performance Alerts`, value: topPerformanceIssues, inline: false },
+                    { name: `${emoji.list} Top Events`, value: topEvents, inline: true },
+                    { name: `${emoji.error} Error Rate`, value: `Total: \`${this.sessionMetrics.totalErrors}\``, inline: true },
                     
-                    { name: `${emoji.ram} 💾 Memory Snapshot`, value: `Used: \`${Math.round(memUsage.heapUsed / 1024 / 1024)}MB\` | RSS: \`${Math.round(memUsage.rss / 1024 / 1024)}MB\``, inline: false },
-                    { name: `${emoji.chart} 📊 Session Stats`, value: `Commands: \`${this.sessionMetrics.totalCommands}\` | Events: \`${this.sessionMetrics.totalEvents}\` | Messages: \`${this.sessionMetrics.totalMessages}\` | Interactions: \`${this.sessionMetrics.totalInteractions}\``, inline: false }
+                    { name: `${emoji.ram} Memory`, value: `Used: \`${Math.round(memUsage.heapUsed / 1024 / 1024)}MB\` | RSS: \`${Math.round(memUsage.rss / 1024 / 1024)}MB\``, inline: false }
                 )
-                .setFooter({ text: `Active Users: ${this.sessionMetrics.uniqueUsers.size} | Active Guilds: ${this.sessionMetrics.uniqueGuilds.size} | Generated: ${new Date().toLocaleTimeString()}` })
+                .setFooter({ text: `Active Users: ${this.sessionMetrics.uniqueUsers.size} | Active Guilds: ${this.sessionMetrics.uniqueGuilds.size}` })
                 .setTimestamp();
 
             const payload = { embeds: [embed] };
@@ -427,12 +524,26 @@ class WebhookLogger {
         if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
         return `${seconds}s`;
     }
+    
+    getStats() {
+        return {
+            uptime: Date.now() - this.startTime,
+            ...this.sessionMetrics,
+            uniqueUsers: this.sessionMetrics.uniqueUsers.size,
+            uniqueGuilds: this.sessionMetrics.uniqueGuilds.size,
+            performance: this.metrics.performance,
+            topCommands: Array.from(this.metrics.commands.entries())
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 10)
+        };
+    }
 
     stop() {
         if (this.reportIntervalId) {
             clearInterval(this.reportIntervalId);
             console.log(`${emoji.warning} Analytics engine stopped`);
         }
+        this.stopRealTimeConsole();
     }
 }
 

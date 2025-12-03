@@ -8,6 +8,7 @@ const WebhookLogger = require('./utils/webhookLogger');
 const StatusWebhook = require('./utils/statusWebhook');
 const BotStatusTracker = require('./utils/botStatusTracker');
 const { logCredentialStatus } = require('./utils/clientSecret');
+const { connectDB } = require('./utils/database');
 const config = require('./config');
 
 console.log(`\n${emoji.lock} VALIDATING DISCORD CREDENTIALS...`);
@@ -17,6 +18,11 @@ if (!credentialCheck.valid) {
     console.error(`${emoji.error} Startup failed: Missing required credentials`);
     process.exit(1);
 }
+
+(async () => {
+    console.log(`\n${emoji.pending} Connecting to MongoDB...`);
+    await connectDB();
+})();
 
 const webhookLogger = new WebhookLogger(process.env.ERROR_WEBHOOK_URL);
 

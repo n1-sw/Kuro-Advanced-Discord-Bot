@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const { connectDB, isDBConnected, User, Mail, ModLog, GuildSettings, Transaction, GameStat, AutomodViolation } = require('./mongodb');
+const emoji = require('./emoji');
 
 const dataDir = path.join(__dirname, '../data');
 
@@ -9,7 +11,7 @@ const ensureDataDir = () => {
     }
 };
 
-const loadData = (filename) => {
+const loadJsonData = (filename) => {
     ensureDataDir();
     const filepath = path.join(dataDir, filename);
     if (fs.existsSync(filepath)) {
@@ -23,7 +25,7 @@ const loadData = (filename) => {
     return {};
 };
 
-const saveData = (filename, data) => {
+const saveJsonData = (filename, data) => {
     ensureDataDir();
     const filepath = path.join(dataDir, filename);
     try {
@@ -33,19 +35,38 @@ const saveData = (filename, data) => {
     }
 };
 
-// ===== USER PROFILES & LEVELS =====
 const users = {
-    data: loadData('users.json'),
+    cache: loadJsonData('users.json'),
     
-    get(guildId, userId) {
-        const key = `${guildId}_${userId}`;
-        if (!this.data[key]) {
-            this.data[key] = {
-                userId: userId,
-                guildId: guildId,
+    async get(guildId, odId) {
+        const uniqueId = `${guildId}_${odId}`;
+        
+        if (isDBConnected()) {
+            try {
+                let user = await User.findOne({ uniqueId });
+                if (!user) {
+                    const config = require('../config');
+                    user = await User.create({
+                        uniqueId,
+                        guildId,
+                        odId,
+                        coins: config.economy.startingCoins
+                    });
+                }
+                return user.toObject();
+            } catch (error) {
+                console.error('MongoDB user get error:', error.message);
+            }
+        }
+        
+        if (!this.cache[uniqueId]) {
+            const config = require('../config');
+            this.cache[uniqueId] = {
+                odId,
+                guildId,
                 xp: 0,
                 level: 0,
-                coins: require('../config').economy.startingCoins,
+                coins: config.economy.startingCoins,
                 warnings: [],
                 lastXpTime: 0,
                 lastDaily: 0,
@@ -56,18 +77,49 @@ const users = {
                 bio: null,
                 favoriteGame: null
             };
+            this.save();
         }
-        return this.data[key];
+        return this.cache[uniqueId];
     },
     
-    save() {
-        saveData('users.json', this.data);
+    async update(guildId, odId, updates) {
+        const uniqueId = `${guildId}_${odId}`;
+        
+        if (isDBConnected()) {
+            try {
+                const user = await User.findOneAndUpdate(
+                    { uniqueId },
+                    { ...updates, updatedAt: new Date() },
+                    { new: true, upsert: true }
+                );
+                return user.toObject();
+            } catch (error) {
+                console.error('MongoDB user update error:', error.message);
+            }
+        }
+        
+        const user = await this.get(guildId, odId);
+        Object.assign(user, updates);
+        this.cache[uniqueId] = user;
+        this.save();
+        return user;
     },
     
-    getLeaderboard(guildId, type = 'level', limit = 10) {
-        const guildUsers = Object.entries(this.data)
+    async getLeaderboard(guildId, type = 'level', limit = 10) {
+        if (isDBConnected()) {
+            try {
+                const sortField = type === 'level' ? { level: -1, xp: -1 } : 
+                                  type === 'coins' ? { coins: -1 } : { totalMessages: -1 };
+                const users = await User.find({ guildId }).sort(sortField).limit(limit);
+                return users.map(u => u.toObject());
+            } catch (error) {
+                console.error('MongoDB leaderboard error:', error.message);
+            }
+        }
+        
+        const guildUsers = Object.entries(this.cache)
             .filter(([key]) => key.startsWith(guildId))
-            .map(([key, data]) => ({ userId: data.userId, ...data }));
+            .map(([key, data]) => ({ odId: data.odId, ...data }));
         
         if (type === 'level') {
             return guildUsers.sort((a, b) => b.level - a.level || b.xp - a.xp).slice(0, limit);
@@ -79,47 +131,71 @@ const users = {
         return guildUsers.slice(0, limit);
     },
     
-    updateProfile(guildId, userId, updates) {
-        const user = this.get(guildId, userId);
-        Object.assign(user, updates);
-        this.save();
-        return user;
+    save() {
+        saveJsonData('users.json', this.cache);
     }
 };
 
-// ===== MAIL SYSTEM =====
 const mail = {
-    data: loadData('mail.json'),
+    cache: loadJsonData('mail.json'),
     
-    send(guildId, fromId, toId, subject, content) {
-        const key = `${guildId}_${toId}`;
-        if (!this.data[key]) {
-            this.data[key] = [];
-        }
-        
+    async send(guildId, fromId, toId, subject, content) {
         const mailItem = {
-            id: Date.now().toString(36),
-            from: fromId,
+            mailId: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+            guildId,
+            fromUserId: fromId,
+            toUserId: toId,
             subject,
             content,
-            timestamp: Date.now(),
-            read: false
+            read: false,
+            timestamp: Date.now()
         };
         
-        this.data[key].push(mailItem);
+        if (isDBConnected()) {
+            try {
+                await Mail.create(mailItem);
+                return mailItem;
+            } catch (error) {
+                console.error('MongoDB mail send error:', error.message);
+            }
+        }
+        
+        const key = `${guildId}_${toId}`;
+        if (!this.cache[key]) {
+            this.cache[key] = [];
+        }
+        this.cache[key].push(mailItem);
         this.save();
         return mailItem;
     },
     
-    getInbox(guildId, userId) {
-        const key = `${guildId}_${userId}`;
-        return this.data[key] || [];
+    async getInbox(guildId, odId) {
+        if (isDBConnected()) {
+            try {
+                const mails = await Mail.find({ guildId, toUserId: odId }).sort({ timestamp: -1 });
+                return mails.map(m => m.toObject());
+            } catch (error) {
+                console.error('MongoDB inbox error:', error.message);
+            }
+        }
+        
+        const key = `${guildId}_${odId}`;
+        return this.cache[key] || [];
     },
     
-    markRead(guildId, userId, mailId) {
-        const key = `${guildId}_${userId}`;
-        if (this.data[key]) {
-            const mailItem = this.data[key].find(m => m.id === mailId);
+    async markRead(guildId, odId, mailId) {
+        if (isDBConnected()) {
+            try {
+                await Mail.updateOne({ mailId, guildId, toUserId: odId }, { read: true });
+                return true;
+            } catch (error) {
+                console.error('MongoDB markRead error:', error.message);
+            }
+        }
+        
+        const key = `${guildId}_${odId}`;
+        if (this.cache[key]) {
+            const mailItem = this.cache[key].find(m => m.mailId === mailId || m.id === mailId);
             if (mailItem) {
                 mailItem.read = true;
                 this.save();
@@ -129,12 +205,21 @@ const mail = {
         return false;
     },
     
-    delete(guildId, userId, mailId) {
-        const key = `${guildId}_${userId}`;
-        if (this.data[key]) {
-            const index = this.data[key].findIndex(m => m.id === mailId);
+    async delete(guildId, odId, mailId) {
+        if (isDBConnected()) {
+            try {
+                await Mail.deleteOne({ mailId, guildId, toUserId: odId });
+                return true;
+            } catch (error) {
+                console.error('MongoDB delete mail error:', error.message);
+            }
+        }
+        
+        const key = `${guildId}_${odId}`;
+        if (this.cache[key]) {
+            const index = this.cache[key].findIndex(m => m.mailId === mailId || m.id === mailId);
             if (index !== -1) {
-                this.data[key].splice(index, 1);
+                this.cache[key].splice(index, 1);
                 this.save();
                 return true;
             }
@@ -142,143 +227,240 @@ const mail = {
         return false;
     },
     
-    getUnreadCount(guildId, userId) {
-        const inbox = this.getInbox(guildId, userId);
+    async getUnreadCount(guildId, odId) {
+        const inbox = await this.getInbox(guildId, odId);
         return inbox.filter(m => !m.read).length;
     },
     
     save() {
-        saveData('mail.json', this.data);
+        saveJsonData('mail.json', this.cache);
     }
 };
 
-// ===== MODERATION LOGS =====
 const modLogs = {
-    data: loadData('modlogs.json'),
+    cache: loadJsonData('modlogs.json'),
     
-    add(guildId, action, moderatorId, targetId, reason) {
-        if (!this.data[guildId]) {
-            this.data[guildId] = [];
-        }
-        
+    async add(guildId, action, moderatorId, targetId, reason) {
         const logEntry = {
-            id: Date.now().toString(36),
+            logId: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+            guildId,
             action,
             moderatorId,
             targetId,
-            reason,
+            reason: reason || 'No reason provided',
             timestamp: Date.now()
         };
         
-        this.data[guildId].push(logEntry);
+        if (isDBConnected()) {
+            try {
+                await ModLog.create(logEntry);
+                return logEntry;
+            } catch (error) {
+                console.error('MongoDB modlog add error:', error.message);
+            }
+        }
+        
+        if (!this.cache[guildId]) {
+            this.cache[guildId] = [];
+        }
+        this.cache[guildId].push(logEntry);
         this.save();
         return logEntry;
     },
     
-    get(guildId, limit = 10) {
-        return (this.data[guildId] || []).slice(-limit).reverse();
+    async get(guildId, limit = 10) {
+        if (isDBConnected()) {
+            try {
+                const logs = await ModLog.find({ guildId }).sort({ timestamp: -1 }).limit(limit);
+                return logs.map(l => l.toObject());
+            } catch (error) {
+                console.error('MongoDB modlog get error:', error.message);
+            }
+        }
+        
+        return (this.cache[guildId] || []).slice(-limit).reverse();
     },
     
-    getByUser(guildId, userId, limit = 10) {
-        return (this.data[guildId] || [])
-            .filter(log => log.targetId === userId)
+    async getByUser(guildId, odId, limit = 10) {
+        if (isDBConnected()) {
+            try {
+                const logs = await ModLog.find({ guildId, targetId: odId }).sort({ timestamp: -1 }).limit(limit);
+                return logs.map(l => l.toObject());
+            } catch (error) {
+                console.error('MongoDB modlog getByUser error:', error.message);
+            }
+        }
+        
+        return (this.cache[guildId] || [])
+            .filter(log => log.targetId === odId)
             .slice(-limit)
             .reverse();
     },
     
     save() {
-        saveData('modlogs.json', this.data);
+        saveJsonData('modlogs.json', this.cache);
     }
 };
 
-// ===== GUILD SETTINGS & PREFERENCES =====
 const guildSettings = {
-    data: loadData('guild-settings.json'),
+    cache: loadJsonData('guild-settings.json'),
     
-    get(guildId) {
-        if (!this.data[guildId]) {
-            this.data[guildId] = {
-                guildId: guildId,
+    async get(guildId) {
+        if (isDBConnected()) {
+            try {
+                let settings = await GuildSettings.findOne({ guildId });
+                if (!settings) {
+                    settings = await GuildSettings.create({ guildId });
+                }
+                const obj = settings.toObject();
+                if (obj.autoReactKeywords instanceof Map) {
+                    obj.autoReactKeywords = Object.fromEntries(obj.autoReactKeywords);
+                }
+                return obj;
+            } catch (error) {
+                console.error('MongoDB guildSettings get error:', error.message);
+            }
+        }
+        
+        if (!this.cache[guildId]) {
+            this.cache[guildId] = {
+                guildId,
                 prefix: '!',
                 welcomeChannel: null,
+                welcomeMessage: null,
+                leaveChannel: null,
+                leaveMessage: null,
                 logsChannel: null,
                 automodEnabled: true,
                 levelingEnabled: true,
                 economyEnabled: true,
-                customPrefix: false,
                 joinRoles: [],
                 mutedRole: null,
+                autoReactEnabled: true,
+                autoReactKeywords: {},
+                mentionReactionsEnabled: false,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             };
+            this.save();
         }
-        return this.data[guildId];
+        return this.cache[guildId];
     },
     
-    update(guildId, updates) {
-        const settings = this.get(guildId);
+    async update(guildId, updates) {
+        if (isDBConnected()) {
+            try {
+                const settings = await GuildSettings.findOneAndUpdate(
+                    { guildId },
+                    { ...updates, updatedAt: new Date() },
+                    { new: true, upsert: true }
+                );
+                const obj = settings.toObject();
+                if (obj.autoReactKeywords instanceof Map) {
+                    obj.autoReactKeywords = Object.fromEntries(obj.autoReactKeywords);
+                }
+                return obj;
+            } catch (error) {
+                console.error('MongoDB guildSettings update error:', error.message);
+            }
+        }
+        
+        const settings = await this.get(guildId);
         Object.assign(settings, updates, { updatedAt: Date.now() });
+        this.cache[guildId] = settings;
         this.save();
         return settings;
     },
     
     save() {
-        saveData('guild-settings.json', this.data);
+        saveJsonData('guild-settings.json', this.cache);
     }
 };
 
-// ===== ECONOMY & TRANSACTIONS =====
 const transactions = {
-    data: loadData('transactions.json'),
+    cache: loadJsonData('transactions.json'),
     
-    add(guildId, fromUserId, toUserId, amount, type, reason = '') {
-        const key = guildId;
-        if (!this.data[key]) {
-            this.data[key] = [];
-        }
-        
+    async add(guildId, fromUserId, toUserId, amount, type, reason = '') {
         const transaction = {
-            id: Date.now().toString(36),
-            from: fromUserId,
-            to: toUserId,
+            transactionId: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+            guildId,
+            fromUserId,
+            toUserId,
             amount,
-            type, // 'transfer', 'shop', 'gamble', 'daily', 'level-up'
+            type,
             reason,
             timestamp: Date.now()
         };
         
-        this.data[key].push(transaction);
-        if (this.data[key].length > 10000) {
-            this.data[key] = this.data[key].slice(-10000);
+        if (isDBConnected()) {
+            try {
+                await Transaction.create(transaction);
+                return transaction;
+            } catch (error) {
+                console.error('MongoDB transaction add error:', error.message);
+            }
+        }
+        
+        if (!this.cache[guildId]) {
+            this.cache[guildId] = [];
+        }
+        this.cache[guildId].push(transaction);
+        if (this.cache[guildId].length > 10000) {
+            this.cache[guildId] = this.cache[guildId].slice(-10000);
         }
         this.save();
         return transaction;
     },
     
-    getHistory(guildId, userId, limit = 20) {
-        const transactions = this.data[guildId] || [];
+    async getHistory(guildId, odId, limit = 20) {
+        if (isDBConnected()) {
+            try {
+                const txns = await Transaction.find({
+                    guildId,
+                    $or: [{ fromUserId: odId }, { toUserId: odId }]
+                }).sort({ timestamp: -1 }).limit(limit);
+                return txns.map(t => t.toObject());
+            } catch (error) {
+                console.error('MongoDB transaction history error:', error.message);
+            }
+        }
+        
+        const transactions = this.cache[guildId] || [];
         return transactions
-            .filter(t => t.from === userId || t.to === userId)
+            .filter(t => t.fromUserId === odId || t.toUserId === odId)
             .slice(-limit)
             .reverse();
     },
     
     save() {
-        saveData('transactions.json', this.data);
+        saveJsonData('transactions.json', this.cache);
     }
 };
 
-// ===== GAME STATISTICS =====
 const gameStats = {
-    data: loadData('game-stats.json'),
+    cache: loadJsonData('game-stats.json'),
     
-    get(guildId, userId, game) {
-        const key = `${guildId}_${userId}`;
-        if (!this.data[key]) {
-            this.data[key] = {};
+    async get(guildId, odId, game) {
+        const uniqueId = `${guildId}_${odId}_${game}`;
+        
+        if (isDBConnected()) {
+            try {
+                let stats = await GameStat.findOne({ uniqueId });
+                if (!stats) {
+                    stats = await GameStat.create({ uniqueId, guildId, odId, game });
+                }
+                return stats.toObject();
+            } catch (error) {
+                console.error('MongoDB gameStats get error:', error.message);
+            }
         }
-        if (!this.data[key][game]) {
-            this.data[key][game] = {
+        
+        const key = `${guildId}_${odId}`;
+        if (!this.cache[key]) {
+            this.cache[key] = {};
+        }
+        if (!this.cache[key][game]) {
+            this.cache[key][game] = {
                 played: 0,
                 won: 0,
                 lost: 0,
@@ -288,11 +470,38 @@ const gameStats = {
                 createdAt: Date.now()
             };
         }
-        return this.data[key][game];
+        return this.cache[key][game];
     },
     
-    recordGame(guildId, userId, game, won, score = 0) {
-        const stats = this.get(guildId, userId, game);
+    async recordGame(guildId, odId, game, won, score = 0) {
+        const uniqueId = `${guildId}_${odId}_${game}`;
+        
+        if (isDBConnected()) {
+            try {
+                const update = {
+                    $inc: { played: 1, totalScore: score },
+                    lastPlayed: new Date()
+                };
+                if (won) update.$inc.won = 1;
+                else update.$inc.lost = 1;
+                
+                const stats = await GameStat.findOneAndUpdate(
+                    { uniqueId },
+                    update,
+                    { new: true, upsert: true, setDefaultsOnInsert: true }
+                );
+                
+                if (score > (stats.bestScore || 0)) {
+                    await GameStat.updateOne({ uniqueId }, { bestScore: score });
+                }
+                
+                return stats.toObject();
+            } catch (error) {
+                console.error('MongoDB recordGame error:', error.message);
+            }
+        }
+        
+        const stats = await this.get(guildId, odId, game);
         stats.played++;
         if (won) stats.won++;
         else stats.lost++;
@@ -303,12 +512,21 @@ const gameStats = {
         return stats;
     },
     
-    getLeaderboard(guildId, game, limit = 10) {
+    async getLeaderboard(guildId, game, limit = 10) {
+        if (isDBConnected()) {
+            try {
+                const stats = await GameStat.find({ guildId, game }).sort({ bestScore: -1 }).limit(limit);
+                return stats.map(s => s.toObject());
+            } catch (error) {
+                console.error('MongoDB game leaderboard error:', error.message);
+            }
+        }
+        
         const leaderboard = [];
-        for (const [key, games] of Object.entries(this.data)) {
+        for (const [key, games] of Object.entries(this.cache)) {
             if (key.startsWith(guildId) && games[game]) {
                 leaderboard.push({
-                    userId: key.split('_')[1],
+                    odId: key.split('_')[1],
                     ...games[game]
                 });
             }
@@ -317,16 +535,64 @@ const gameStats = {
     },
     
     save() {
-        saveData('game-stats.json', this.data);
+        saveJsonData('game-stats.json', this.cache);
     }
 };
 
-// ===== ANTI-NUKE TRACKING =====
+const automodViolations = {
+    async add(guildId, odId, violationType, messageContent, action) {
+        if (isDBConnected()) {
+            try {
+                await AutomodViolation.create({
+                    guildId,
+                    odId,
+                    violationType,
+                    messageContent: messageContent.substring(0, 500),
+                    action
+                });
+            } catch (error) {
+                console.error('MongoDB automod violation error:', error.message);
+            }
+        }
+    },
+    
+    async getViolations(guildId, odId, limit = 20) {
+        if (isDBConnected()) {
+            try {
+                const violations = await AutomodViolation.find({ guildId, odId })
+                    .sort({ timestamp: -1 })
+                    .limit(limit);
+                return violations.map(v => v.toObject());
+            } catch (error) {
+                console.error('MongoDB get violations error:', error.message);
+            }
+        }
+        return [];
+    },
+    
+    async getViolationCount(guildId, odId, violationType, timeWindowMs = 3600000) {
+        if (isDBConnected()) {
+            try {
+                const since = new Date(Date.now() - timeWindowMs);
+                return await AutomodViolation.countDocuments({
+                    guildId,
+                    odId,
+                    violationType,
+                    timestamp: { $gte: since }
+                });
+            } catch (error) {
+                console.error('MongoDB violation count error:', error.message);
+            }
+        }
+        return 0;
+    }
+};
+
 const antiNukeTracking = {
     data: {},
     
-    track(guildId, userId, action) {
-        const key = `${guildId}_${userId}_${action}`;
+    track(guildId, odId, action) {
+        const key = `${guildId}_${odId}_${action}`;
         const now = Date.now();
         
         if (!this.data[key]) {
@@ -339,8 +605,8 @@ const antiNukeTracking = {
         return this.data[key].length;
     },
     
-    getCount(guildId, userId, action) {
-        const key = `${guildId}_${userId}_${action}`;
+    getCount(guildId, odId, action) {
+        const key = `${guildId}_${odId}_${action}`;
         const now = Date.now();
         
         if (!this.data[key]) return 0;
@@ -350,12 +616,11 @@ const antiNukeTracking = {
     }
 };
 
-// ===== SPAM TRACKING =====
 const spamTracking = {
     data: {},
     
-    track(guildId, userId) {
-        const key = `${guildId}_${userId}`;
+    track(guildId, odId) {
+        const key = `${guildId}_${odId}`;
         const now = Date.now();
         const config = require('../config');
         
@@ -369,46 +634,12 @@ const spamTracking = {
         return this.data[key].length;
     },
     
-    isSpamming(guildId, userId) {
+    isSpamming(guildId, odId) {
         const config = require('../config');
-        return this.track(guildId, userId) >= config.automod.spamThreshold;
+        return this.track(guildId, odId) >= config.automod.spamThreshold;
     }
 };
 
-// ===== USER PREFERENCES & CUSTOMIZATION =====
-const userPreferences = {
-    data: loadData('user-preferences.json'),
-    
-    get(guildId, userId) {
-        const key = `${guildId}_${userId}`;
-        if (!this.data[key]) {
-            this.data[key] = {
-                userId: userId,
-                guildId: guildId,
-                dmNotifications: true,
-                dailyReminder: false,
-                profilePrivate: false,
-                theme: 'default',
-                language: 'en',
-                createdAt: Date.now()
-            };
-        }
-        return this.data[key];
-    },
-    
-    update(guildId, userId, updates) {
-        const prefs = this.get(guildId, userId);
-        Object.assign(prefs, updates);
-        this.save();
-        return prefs;
-    },
-    
-    save() {
-        saveData('user-preferences.json', this.data);
-    }
-};
-
-// ===== SYSTEM CACHE & MEMORY =====
 const cache = {
     data: {},
     ttl: {},
@@ -443,14 +674,16 @@ const cache = {
 };
 
 module.exports = {
+    connectDB,
+    isDBConnected,
     users,
     mail,
     modLogs,
     guildSettings,
     transactions,
     gameStats,
+    automodViolations,
     antiNukeTracking,
     spamTracking,
-    userPreferences,
     cache
 };

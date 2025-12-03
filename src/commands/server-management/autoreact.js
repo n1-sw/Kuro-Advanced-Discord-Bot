@@ -1,33 +1,9 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const emoji = require('../../utils/emoji');
 const AdvancedEmbed = require('../../utils/advancedEmbed');
-const fs = require('fs');
-const path = require('path');
-
-const configFile = path.join(__dirname, '../../data/autoreact.json');
+const { guildSettings } = require('../../utils/database');
 
 const defaultEmojis = ['😀', '😂', '❤️', '🔥', '👍', '🎉', '✨', '💯', '🙌', '👀', '💪', '🤩', '😎', '🥳', '💖', '⭐', '🌟', '💫', '🎯', '🏆'];
-
-const loadAutoReactConfig = () => {
-    try {
-        if (!fs.existsSync(path.dirname(configFile))) {
-            fs.mkdirSync(path.dirname(configFile), { recursive: true });
-        }
-        if (fs.existsSync(configFile)) {
-            return JSON.parse(fs.readFileSync(configFile, 'utf8'));
-        }
-    } catch (error) {
-            console.error(`[Command Error] autoreact.js:`, error.message);}
-    return {};
-};
-
-const saveAutoReactConfig = (config) => {
-    try {
-        fs.mkdirSync(path.dirname(configFile), { recursive: true });
-        fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-    } catch (error) {
-            console.error(`[Command Error] autoreact.js:`, error.message);}
-};
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -75,12 +51,13 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const config = loadAutoReactConfig();
             const guildId = interaction.guild.id;
             const subcommand = interaction.options.getSubcommand();
             
-            if (!config[guildId]) {
-                config[guildId] = { keywords: {}, enabled: true, mentionReactionsEnabled: false };
+            let settings = await guildSettings.get(guildId);
+            
+            if (!settings.autoReactKeywords) {
+                settings.autoReactKeywords = {};
             }
 
             if (subcommand === 'add') {
@@ -92,8 +69,10 @@ module.exports = {
                     return interaction.reply({ embeds: [embed], flags: 64 });
                 }
                 
-                config[guildId].keywords[keyword] = reactionEmoji;
-                saveAutoReactConfig(config);
+                const keywords = { ...settings.autoReactKeywords };
+                keywords[keyword] = reactionEmoji;
+                
+                await guildSettings.update(guildId, { autoReactKeywords: keywords });
                 
                 const embed = AdvancedEmbed.commandSuccess('Auto-Reaction Added', `\`${keyword}\` → ${reactionEmoji}`);
                 return interaction.reply({ embeds: [embed] });
@@ -102,9 +81,11 @@ module.exports = {
             if (subcommand === 'remove') {
                 const keyword = interaction.options.getString('keyword').toLowerCase();
                 
-                if (config[guildId].keywords[keyword]) {
-                    delete config[guildId].keywords[keyword];
-                    saveAutoReactConfig(config);
+                const keywords = { ...settings.autoReactKeywords };
+                if (keywords[keyword]) {
+                    delete keywords[keyword];
+                    await guildSettings.update(guildId, { autoReactKeywords: keywords });
+                    
                     const embed = AdvancedEmbed.commandSuccess('Auto-Reaction Removed', `Removed reaction for \`${keyword}\``);
                     return interaction.reply({ embeds: [embed] });
                 }
@@ -114,40 +95,44 @@ module.exports = {
             }
 
             if (subcommand === 'list') {
-                const reactions = Object.entries(config[guildId].keywords || {});
+                const keywords = settings.autoReactKeywords || {};
+                const reactions = Object.entries(keywords);
                 
                 if (reactions.length === 0) {
-                    const embed = AdvancedEmbed.info('Auto-Reactions', 'No auto-reactions configured yet');
+                    const embed = AdvancedEmbed.info('Auto-Reactions', 'No auto-reactions configured yet.\n\nUse `/autoreact add` to add keywords!');
                     return interaction.reply({ embeds: [embed] });
                 }
                 
                 const entries = reactions.map(([kw, em]) => `${em} \`${kw}\``);
                 const embed = AdvancedEmbed.list('Auto-Reactions', entries, emoji.color_info);
+                embed.addFields({ 
+                    name: `${emoji.status} Status`, 
+                    value: settings.autoReactEnabled ? `${emoji.success} Enabled` : `${emoji.error} Disabled`,
+                    inline: true 
+                });
                 return interaction.reply({ embeds: [embed] });
             }
 
             if (subcommand === 'enable') {
-                config[guildId].enabled = true;
-                saveAutoReactConfig(config);
-                const embed = AdvancedEmbed.commandSuccess('Auto-Reactions Enabled', 'Bot will react to keywords');
+                await guildSettings.update(guildId, { autoReactEnabled: true });
+                const embed = AdvancedEmbed.commandSuccess('Auto-Reactions Enabled', 'Bot will now react to configured keywords');
                 return interaction.reply({ embeds: [embed] });
             }
 
             if (subcommand === 'disable') {
-                config[guildId].enabled = false;
-                saveAutoReactConfig(config);
-                const embed = AdvancedEmbed.commandSuccess('Auto-Reactions Disabled', 'Bot will not react to keywords');
+                await guildSettings.update(guildId, { autoReactEnabled: false });
+                const embed = AdvancedEmbed.commandSuccess('Auto-Reactions Disabled', 'Bot will no longer react to keywords');
                 return interaction.reply({ embeds: [embed] });
             }
 
             if (subcommand === 'mention') {
                 const action = interaction.options.getString('action');
                 const enabled = action === 'enable';
-                config[guildId].mentionReactionsEnabled = enabled;
-                saveAutoReactConfig(config);
+                await guildSettings.update(guildId, { mentionReactionsEnabled: enabled });
+                
                 const embed = AdvancedEmbed.commandSuccess(
                     'Mention Reactions',
-                    enabled ? 'Bot will randomly react to mentions' : 'Bot will not react to mentions'
+                    enabled ? 'Bot will randomly react when users are mentioned' : 'Bot will not react to mentions'
                 );
                 return interaction.reply({ embeds: [embed] });
             }
@@ -157,6 +142,38 @@ module.exports = {
             if (!interaction.replied) {
                 await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
             }
+        }
+    },
+    
+    async handleMessage(message, client) {
+        if (message.author.bot || !message.guild) return;
+        
+        try {
+            const settings = await guildSettings.get(message.guild.id);
+            
+            if (!settings.autoReactEnabled) return;
+            
+            const content = message.content.toLowerCase();
+            const keywords = settings.autoReactKeywords || {};
+            
+            for (const [keyword, reactionEmoji] of Object.entries(keywords)) {
+                if (content.includes(keyword)) {
+                    try {
+                        await message.react(reactionEmoji);
+                    } catch (e) {
+                    }
+                }
+            }
+            
+            if (settings.mentionReactionsEnabled && message.mentions.users.size > 0) {
+                const randomEmoji = defaultEmojis[Math.floor(Math.random() * defaultEmojis.length)];
+                try {
+                    await message.react(randomEmoji);
+                } catch (e) {
+                }
+            }
+        } catch (error) {
+            console.error('AutoReact handler error:', error.message);
         }
     }
 };
