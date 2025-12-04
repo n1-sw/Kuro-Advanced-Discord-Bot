@@ -3,7 +3,7 @@ const { successEmbed, calculateXpForLevel, randomInt } = require('../utils/helpe
 const config = require('../config');
 const emoji = require('../utils/emoji');
 
-const defaultEmojis = ['😀', '😂', '❤️', '🔥', '👍', '🎉', '✨', '💯', '🙌', '👀', '💪', '🤩', '😎', '🥳', '💖', '⭐', '🌟', '💫', '🎯', '🏆'];
+const defaultEmojis = ['😀', '😂', '❤️', '🔥', '👍', '🎉', '✨', '💯', '🙌', '👀', '💪', '🤩', '😎', '🥳', '💖', '⭐', '🌟', '💫', '🎯', '🏆', '😊', '🥰', '😍', '🤗', '👏', '🙏', '💕', '💗', '🌈', '🎊'];
 
 module.exports = {
     name: 'messageCreate',
@@ -13,12 +13,12 @@ module.exports = {
         if (message.author.bot) return;
         
         await this.handleAutoMod(message, client);
-        await this.handleAutoReactions(message);
+        await this.handleAutoReactions(message, client);
         await this.handleLeveling(message);
         await this.checkMail(message);
     },
     
-    async handleAutoReactions(message) {
+    async handleAutoReactions(message, client) {
         if (!message.content) return;
         
         try {
@@ -32,7 +32,19 @@ module.exports = {
             for (const [keyword, reactionEmoji] of Object.entries(keywords)) {
                 if (keyword && keyword.length > 0 && content.includes(keyword.toLowerCase())) {
                     try {
-                        await message.react(reactionEmoji);
+                        const customEmojiMatch = reactionEmoji.match(/<a?:(\w+):(\d+)>/);
+                        
+                        if (customEmojiMatch) {
+                            const emojiId = customEmojiMatch[2];
+                            const guildEmoji = message.guild.emojis.cache.get(emojiId);
+                            if (guildEmoji) {
+                                await message.react(guildEmoji);
+                            } else {
+                                await message.react(defaultEmojis[Math.floor(Math.random() * defaultEmojis.length)]);
+                            }
+                        } else {
+                            await message.react(reactionEmoji);
+                        }
                     } catch (error) {
                     }
                     break;
@@ -43,16 +55,37 @@ module.exports = {
                 if (!message.mentions.has(message.client.user.id)) {
                     const randomChance = Math.random();
                     if (randomChance < 0.7) {
-                        const randomEmoji = defaultEmojis[Math.floor(Math.random() * defaultEmojis.length)];
+                        let randomEmoji = defaultEmojis[Math.floor(Math.random() * defaultEmojis.length)];
+                        
+                        if (client.emojiManager && Math.random() < 0.3) {
+                            try {
+                                const guildEmojis = await client.emojiManager.getEmojisByGuild(message.guild.id);
+                                if (guildEmojis.length > 0) {
+                                    const randomGuildEmoji = guildEmojis[Math.floor(Math.random() * guildEmojis.length)];
+                                    const emojiObj = message.guild.emojis.cache.get(randomGuildEmoji.id);
+                                    if (emojiObj) {
+                                        randomEmoji = emojiObj;
+                                    }
+                                }
+                            } catch (err) {
+                            }
+                        }
+                        
                         try {
                             await message.react(randomEmoji);
                         } catch (error) {
+                            if (error.code === 10014 || error.code === 50013) {
+                                try {
+                                    const fallback = defaultEmojis[Math.floor(Math.random() * defaultEmojis.length)];
+                                    await message.react(fallback);
+                                } catch (e) {
+                                }
+                            }
                         }
                     }
                 }
             }
         } catch (error) {
-            console.error('Error in auto-reactions:', error.message);
         }
     },
     

@@ -1,0 +1,23 @@
+{
+  "1397638263300161638": {
+    "guildId": "1397638263300161638",
+    "prefix": "!",
+    "welcomeChannel": null,
+    "welcomeMessage": null,
+    "leaveChannel": null,
+    "leaveMessage": null,
+    "logsChannel": null,
+    "automodEnabled": true,
+    "levelingEnabled": true,
+    "economyEnabled": true,
+    "joinRoles": [],
+    "mutedRole": null,
+    "autoReactEnabled": true,
+    "autoReactKeywords": {
+      "<@698131338846404609>": "<a:tick:1379146533743628449>"
+    },
+    "mentionReactionsEnabled": false,
+    "createdAt": 1764858769798,
+    "updatedAt": 1764858769799
+  }
+}

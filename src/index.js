@@ -9,6 +9,8 @@ const StatusWebhook = require('./utils/statusWebhook');
 const BotStatusTracker = require('./utils/botStatusTracker');
 const { logCredentialStatus } = require('./utils/clientSecret');
 const { connectDB } = require('./utils/database');
+const FakeConsole = require('./utils/fakeConsole');
+const EmojiManager = require('./utils/emojiManager');
 const config = require('./config');
 
 console.log(`\n${emoji.lock} VALIDATING DISCORD CREDENTIALS...`);
@@ -65,6 +67,10 @@ async function handleClientReady() {
     console.log(`${emoji.success} Bot is online as ${client.user.tag}`);
     console.log(`${emoji.server} Serving ${client.guilds.cache.size} servers`);
 
+    client.emojiManager = new EmojiManager(client);
+    await client.emojiManager.refreshCache();
+    console.log(`${emoji.success} Emoji Manager initialized`);
+
     if (client.autoDeployEnabled) {
         const token = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
         const clientId = process.env.CLIENT_ID;
@@ -82,6 +88,14 @@ async function handleClientReady() {
         const statusWebhook = new StatusWebhook(process.env.STATUS_WEBHOOK_URL, client);
         statusWebhook.start(30000);
         client.statusWebhook = statusWebhook;
+    }
+
+    if (process.env.CONSOLE_WEBHOOK_URL) {
+        const fakeConsole = new FakeConsole(process.env.CONSOLE_WEBHOOK_URL, client);
+        fakeConsole.start(60000);
+        await fakeConsole.sendStartupMessage();
+        client.fakeConsole = fakeConsole;
+        console.log(`${emoji.success} Fake Console webhook started`);
     }
 
     startRPCRotation(client);
