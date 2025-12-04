@@ -19,9 +19,14 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const target = interaction.options.getMember('user');
+            const optedUser = interaction.options.getUser && interaction.options.getUser('user');
+            const targetUser = optedUser || null;
+            let target = interaction.options.getMember && interaction.options.getMember('user') || null;
+            if (!target && targetUser && interaction.guild) {
+                try { target = await interaction.guild.members.fetch(targetUser.id); } catch (e) { target = null; }
+            }
             const reason = interaction.options.getString('reason') || 'No reason provided';
-            
+
             if (!target) {
                 return interaction.reply({ embeds: [errorEmbed('User not found in this server.')], flags: 64 });
             }

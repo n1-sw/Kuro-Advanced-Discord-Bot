@@ -28,8 +28,20 @@ module.exports = {
         try {
             await interaction.deferReply();
             
-            const target = interaction.options.getMember('user') || interaction.member;
-            const userData = await users.get(interaction.guild.id, target.id);
+            const optedUser = interaction.options.getUser('user');
+            const targetUser = optedUser || interaction.user;
+            // Try to resolve a GuildMember for display name / nickname
+            let targetMember = interaction.options.getMember('user') || interaction.member;
+            if (!targetMember) {
+                try {
+                    targetMember = await interaction.guild.members.fetch(targetUser.id);
+                } catch (e) {
+                    targetMember = null;
+                }
+            }
+
+            const targetId = targetUser.id;
+            const userData = await users.get(interaction.guild.id, targetId);
             
             if (!userData.dailyStreak) userData.dailyStreak = 0;
             if (!userData.totalMessages) userData.totalMessages = 0;
@@ -44,12 +56,18 @@ module.exports = {
             const progressPercent = xpNeededForNext > 0 ? Math.floor((xpInCurrentLevel / xpNeededForNext) * 100) : 0;
             
             const leaderboard = await users.getLeaderboard(interaction.guild.id, 'level', 100);
-            const rank = leaderboard.findIndex(u => u.odId === target.id) + 1 || leaderboard.length + 1;
+            const idx = leaderboard.findIndex(u => u.odId === targetId);
+            const rank = idx === -1 ? (leaderboard.length + 1) : (idx + 1);
             const rankTitle = getRankTitle(userData.level || 0);
+
+            const displayName = targetMember?.displayName || targetUser.username || 'User';
+            const avatarUrl = typeof targetUser.displayAvatarURL === 'function'
+                ? targetUser.displayAvatarURL({ size: 256, extension: 'png' })
+                : null;
 
             const embed = AdvancedEmbed.leveling(
                 `${rankTitle} • Level ${userData.level || 0}`,
-                `${target.user?.username || 'User'}'s Rank Card\n\n${progressBar(xpInCurrentLevel, xpNeededForNext, 20)} ${Math.round(progressPercent)}%`,
+                `${displayName}'s Rank Card\n\n${progressBar(xpInCurrentLevel, xpNeededForNext, 20)} ${Math.round(progressPercent)}%`,
                 [
                     { name: `${emoji.leveling} Level`, value: `\`${userData.level || 0}\``, inline: true },
                     { name: `${emoji.chart} Rank`, value: `\`#${rank}/${leaderboard.length || 1}\``, inline: true },
@@ -57,9 +75,10 @@ module.exports = {
                     { name: `${emoji.messages} Messages`, value: `\`${userData.totalMessages || 0}\``, inline: true },
                     { name: `${emoji.diamond} Coins`, value: `\`${formatNumber(userData.coins || 0)}\``, inline: true },
                     { name: `${emoji.star} XP`, value: `\`${xpInCurrentLevel}/${xpNeededForNext}\``, inline: true }
-                ],
-                target.user?.displayAvatarURL?.({ size: 256 })
+                ]
             );
+
+            if (avatarUrl) embed.setThumbnail(avatarUrl);
 
             await interaction.editReply({ embeds: [embed] }).catch(() => {
                 interaction.editReply({ content: `📊 **${rankTitle}** • Level ${userData.level || 0} | Rank #${rank}` });

@@ -20,7 +20,12 @@ module.exports = {
                 return interaction.reply({ content: `${emoji.error || '❌'} This command can only be used in a server.`, flags: 64 }).catch(() => {});
             }
 
-            const target = interaction.options.getMember('user');
+            const optedUser = interaction.options.getUser && interaction.options.getUser('user');
+            const targetUser = optedUser || null;
+            let target = interaction.options.getMember && interaction.options.getMember('user') || null;
+            if (!target && targetUser && interaction.guild) {
+                try { target = await interaction.guild.members.fetch(targetUser.id); } catch (e) { target = null; }
+            }
             
             let logs = [];
             let title = 'Recent Moderation Logs';

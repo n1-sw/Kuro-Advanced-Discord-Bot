@@ -160,7 +160,14 @@ function stopAutoRefreshSchedule(intervalId) {
 }
 
 function getAutoRefreshStatus() {
+    const config = require('../config');
+    const enabled = Boolean(config?.autoDeploy?.enabled ?? true);
+    const intervalMs = config?.autoDeploy?.refreshIntervalMs ?? 3600000;
+    const intervalMinutes = Math.floor(intervalMs / 60000);
+
     return {
+        enabled,
+        interval: intervalMinutes,
         lastRefresh: lastRefreshTime,
         totalRefreshes: refreshCount,
         nextRefreshIn: lastRefreshTime ? 'Check auto-refresh schedule' : 'Not yet synced'

@@ -57,32 +57,39 @@ const channelDelete = require('./events/channelDelete');
 const roleDelete = require('./events/roleDelete');
 const autoModerationActionExecution = require('./events/autoModerationActionExecution');
 
-client.on('ready', async () => {
+let __readyHandled = false;
+async function handleClientReady() {
+    if (__readyHandled) return;
+    __readyHandled = true;
     client.statusTracker.recordBotOnline();
     console.log(`${emoji.success} Bot is online as ${client.user.tag}`);
     console.log(`${emoji.server} Serving ${client.guilds.cache.size} servers`);
-    
+
     if (client.autoDeployEnabled) {
         const token = process.env.DISCORD_BOT_TOKEN || process.env.TOKEN;
         const clientId = process.env.CLIENT_ID;
-        
+
         if (token && clientId) {
             await autoDeployCommands(token, clientId, { silent: false, webhookLogger });
-            
+
             const refreshInterval = config.autoDeploy?.refreshIntervalMs || 3600000;
             client.autoRefreshIntervalId = await startAutoRefreshSchedule(client, token, clientId, refreshInterval);
             console.log(`${emoji.success} Auto-refresh schedule started successfully`);
         }
     }
-    
+
     if (process.env.STATUS_WEBHOOK_URL) {
         const statusWebhook = new StatusWebhook(process.env.STATUS_WEBHOOK_URL, client);
         statusWebhook.start(30000);
         client.statusWebhook = statusWebhook;
     }
-    
+
     startRPCRotation(client);
-});
+}
+
+// Use the new `clientReady` event. Listening to `ready` triggers a deprecation warning
+// in newer discord.js versions, so avoid registering for it to keep startup clean.
+client.on('clientReady', handleClientReady);
 
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isCommand()) {

@@ -13,7 +13,12 @@ module.exports = {
     
     async execute(interaction) {
         try {
-            const target = interaction.options.getMember('user') || interaction.member;
+            const optedUser = interaction.options.getUser && interaction.options.getUser('user');
+            const targetUser = optedUser || null;
+            let target = interaction.options.getMember && interaction.options.getMember('user') || interaction.member;
+            if (!target && targetUser && interaction.guild) {
+                try { target = await interaction.guild.members.fetch(targetUser.id); } catch (e) { target = interaction.member; }
+            }
             const userData = await users.get(interaction.guild.id, target.id);
             
             const embed = createEmbed({
